@@ -10,7 +10,14 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 
-from .config import OPENAI_API_KEY, OPENAI_MODEL, REPLY_TEMPERATURE, TAG_TEMPERATURE
+from .config import (
+    AI_CONCURRENCY,
+    AI_TIMEOUT_SECONDS,
+    OPENAI_API_KEY,
+    OPENAI_MODEL,
+    REPLY_TEMPERATURE,
+    TAG_TEMPERATURE,
+)
 from .schemas import ReviewAnalysis, ReviewTags
 
 LANGUAGES_NOTE = """Reviews may be written in:
@@ -32,7 +39,8 @@ Rules:
     MEDIUM = a real complaint that should be fixed soon (late delivery, wrong item, rude reply).
     LOW    = praise, suggestions, or minor issues.
 - language: English, Tamil, Tanglish, or Other.
-- summary: ONE short sentence in ENGLISH.
+- summary: ONE short sentence in ENGLISH, written in Latin letters, even when the review is
+  in Tamil or Tanglish. Translate the meaning; never copy Tamil words or Tamil script.
 """
 
 REPLY_SYSTEM_PROMPT = f"""You write replies to customer reviews for a business in Tamil Nadu, India.
@@ -73,7 +81,11 @@ reply_prompt = ChatPromptTemplate.from_messages(
 
 def _llm(temperature: float) -> ChatOpenAI:
     return ChatOpenAI(
-        model=OPENAI_MODEL, temperature=temperature, api_key=OPENAI_API_KEY, max_retries=3
+        model=OPENAI_MODEL,
+        temperature=temperature,
+        api_key=OPENAI_API_KEY,
+        max_retries=3,  # network errors / rate limits are retried by the OpenAI client
+        timeout=AI_TIMEOUT_SECONDS,  # one stuck call can never hang a whole upload
     )
 
 
@@ -81,12 +93,15 @@ def _build_chains():
     """Returns (tag_chain, reply_chain)."""
     if not OPENAI_API_KEY or OPENAI_API_KEY.startswith("sk-your"):
         raise RuntimeError("OPENAI_API_KEY is missing. Put your key in the .env file.")
-    tag_chain = tag_prompt | _llm(TAG_TEMPERATURE).with_structured_output(ReviewTags)
+    # If the AI breaks a rule (e.g. a Tamil summary, an empty field), ask once more.
+    tag_chain = (tag_prompt | _llm(TAG_TEMPERATURE).with_structured_output(ReviewTags)).with_retry(
+        stop_after_attempt=2, retry_if_exception_type=(ValueError,)
+    )
     reply_chain = reply_prompt | _llm(REPLY_TEMPERATURE) | StrOutputParser()
     return tag_chain, reply_chain
 
 
-def analyze_reviews(reviews: list[dict], max_concurrency: int = 5) -> list[ReviewAnalysis | Exception]:
+def analyze_reviews(reviews: list[dict], max_concurrency: int = AI_CONCURRENCY) -> list[ReviewAnalysis | Exception]:
     """Tag many reviews in parallel, then write a reply for each.
 
     Each item in `reviews` needs: review_text, rating, platform.
@@ -127,10 +142,11 @@ def analyze_reviews(reviews: list[dict], max_concurrency: int = 5) -> list[Revie
     for i, reply in zip(ok, replies):
         if isinstance(reply, Exception):
             results[i] = reply
-        elif not reply.strip():
-            results[i] = ValueError("AI returned an empty reply")
         else:
-            results[i] = ReviewAnalysis(**tags[i].model_dump(), suggested_reply=reply.strip())
+            try:
+                results[i] = ReviewAnalysis(**tags[i].model_dump(), suggested_reply=reply)
+            except ValueError as exc:  # e.g. empty reply
+                results[i] = exc
     return results
 
 

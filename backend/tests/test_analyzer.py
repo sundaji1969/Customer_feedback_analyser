@@ -4,7 +4,7 @@ import pytest
 from app import analyzer, config
 from app.schemas import ReviewAnalysis, ReviewTags
 
-GOOD_TAGS = dict(sentiment="positive", category="Delivery", urgency="LOW", language="Tamil", summary="s")
+GOOD_TAGS = dict(sentiment="positive", category="Delivery", urgency="LOW", language="Tamil", summary="Customer liked the food.")
 
 
 class FakeChain:
@@ -42,10 +42,12 @@ def test_tags_and_reply_use_their_own_temperatures(monkeypatch):
     monkeypatch.setattr(analyzer, "TAG_TEMPERATURE", 0.0)
     monkeypatch.setattr(analyzer, "REPLY_TEMPERATURE", 0.4)
     tag_chain, reply_chain = analyzer._build_chains()
-    assert tag_chain.first.__class__.__name__ == "ChatPromptTemplate"
-    temps = [step.bound.temperature if hasattr(step, "bound") else getattr(step, "temperature", None)
-             for step in [tag_chain.steps[1], reply_chain.steps[1]]]
-    assert temps == [0.0, 0.4]
+    tag_llm = tag_chain.bound.steps[1].bound          # retry wrapper -> prompt | llm-with-schema
+    reply_llm = reply_chain.steps[1]
+    assert (tag_llm.temperature, reply_llm.temperature) == (0.0, 0.4)
+    # every call has a time limit, so one stuck request can't hang an upload
+    assert tag_llm.request_timeout == reply_llm.request_timeout == config.AI_TIMEOUT_SECONDS
+    assert tag_chain.max_attempt_number == 2          # broken AI output is asked for once more
 
 
 def test_inputs_and_tags_flow_into_reply(monkeypatch):
@@ -119,6 +121,30 @@ def test_prompts_include_review_details():
     )
     assert "SAME language" in reply_msgs[0].content
     assert "urgency=LOW" in reply_msgs[1].content and "language=Tanglish" in reply_msgs[1].content
+
+
+@pytest.mark.parametrize("summary, problem", [
+    ("", "empty"),
+    ("   ", "empty"),
+    ("சாப்பாடு நன்றாக இருந்தது", "English"),             # Tamil script
+    ("Food was good, சேவை அருமை", "English"),            # mixed
+    ("5/5 !!!", "English"),                               # no words
+])
+def test_summary_must_be_english(summary, problem):
+    with pytest.raises(ValueError, match=problem):
+        ReviewTags(**{**GOOD_TAGS, "summary": summary})
+
+
+def test_tanglish_style_english_summary_is_fine():
+    t = ReviewTags(**{**GOOD_TAGS, "summary": "  Biryani tasted great but delivery was late.  "})
+    assert t.summary == "Biryani tasted great but delivery was late."
+
+
+def test_reply_must_not_be_empty():
+    with pytest.raises(ValueError, match="empty"):
+        ReviewAnalysis(**GOOD_TAGS, suggested_reply="  ")
+    # Tamil replies are allowed (and expected) - only the summary must be English
+    assert ReviewAnalysis(**GOOD_TAGS, suggested_reply="நன்றி!").suggested_reply == "நன்றி!"
 
 
 def test_ai_output_schema_rejects_unknown_values():

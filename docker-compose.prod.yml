@@ -1,0 +1,58 @@
+# ReviewLens - production Compose file (for a public server, e.g. a Hostinger VPS)
+#
+# Differences from docker-compose.yml (which is for your own PC):
+# - Only the dashboard is reachable from the internet. The database and API stay
+#   inside Docker's private network (no "ports:"), so nobody can reach them directly.
+# - The dashboard needs a password (DASHBOARD_PASSWORD).
+# - Required secrets must be set, or Docker stops with a clear error.
+#
+# Start:  docker compose -f docker-compose.prod.yml up -d --build
+# Then open http://<your-server-ip>:<FRONTEND_PORT, default 8502>
+#
+# Use only letters and numbers in POSTGRES_PASSWORD (symbols like @ : / # break the database URL).
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-reviewlens}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD to a long random password}
+      POSTGRES_DB: ${POSTGRES_DB:-reviewlens}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?Set OPENAI_API_KEY}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      TAG_TEMPERATURE: ${TAG_TEMPERATURE:-0}
+      REPLY_TEMPERATURE: ${REPLY_TEMPERATURE:-0.4}
+      AI_CONCURRENCY: ${AI_CONCURRENCY:-8}
+      AI_TIMEOUT_SECONDS: ${AI_TIMEOUT_SECONDS:-60}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-reviewlens}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-reviewlens}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    environment:
+      BACKEND_URL: http://backend:8000
+      DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD:?Set DASHBOARD_PASSWORD so strangers cannot use the dashboard}
+    ports:
+      - "${FRONTEND_PORT:-8502}:8501"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  pgdata:

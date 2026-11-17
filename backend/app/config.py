@@ -27,6 +27,19 @@ def _temperature(name: str, default: float) -> float:
     return value
 
 
+def _positive_int(name: str, default: int) -> int:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return default
+    if not raw.isdigit() or int(raw) < 1:
+        raise ValueError(f"{name} must be a whole number of 1 or more, got {raw!r}")
+    return int(raw)
+
+
+# How many reviews are sent to OpenAI at the same time, and how long one call may take.
+AI_CONCURRENCY = _positive_int("AI_CONCURRENCY", 8)
+AI_TIMEOUT_SECONDS = _positive_int("AI_TIMEOUT_SECONDS", 60)
+
 # 0 = same answer every time (best for tags). Higher = more varied wording (good for replies).
 TAG_TEMPERATURE = _temperature("TAG_TEMPERATURE", 0.0)
 REPLY_TEMPERATURE = _temperature("REPLY_TEMPERATURE", 0.4)

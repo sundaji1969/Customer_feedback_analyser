@@ -110,6 +110,21 @@ def _analyze_pending(db: Session, review_ids: list[str] | None = None) -> tuple[
     return analyzed, failed, errors
 
 
+def excel_safe(value):
+    """Customer text starting with = + - @ would run as a FORMULA in Excel (and show #NAME?
+    or worse). A leading apostrophe makes Excel treat the cell as plain text."""
+    if isinstance(value, str) and value[:1] in ("=", "+", "-", "@", "\t", "\r"):
+        return "'" + value
+    return value
+
+
+def excel_csv(df: pd.DataFrame) -> bytes:
+    """CSV that opens correctly in Excel: Tamil text intact, no formulas, Windows line endings."""
+    safe = df.astype(object).map(excel_safe)  # every cell; non-text values pass through
+    # "utf-8-sig" adds a marker (BOM) so Excel reads the file as UTF-8 and shows Tamil correctly
+    return safe.to_csv(index=False, lineterminator="\r\n").encode("utf-8-sig")
+
+
 def _filtered_query(urgency, sentiment, category, platform, language, start_date, end_date):
     query = select(Review)
     if urgency:
@@ -220,8 +235,7 @@ def export_reviews(
         [ReviewOut.model_validate(r).model_dump() for r in rows],
         columns=list(ReviewOut.model_fields),
     )
-    # "utf-8-sig" adds a marker so Excel shows Tamil text correctly
-    data = df.to_csv(index=False).encode("utf-8-sig")
+    data = excel_csv(df)
     filename = f"reviewlens_export_{date.today().isoformat()}.csv"
     return StreamingResponse(
         io.BytesIO(data),

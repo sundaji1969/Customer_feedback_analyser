@@ -95,7 +95,13 @@ The file must be **UTF-8** (in Excel: *Save As → CSV UTF-8*) with these column
 | `rating` | 1–5 | Can be empty |
 | `review_text` | Biryani semma taste… | Rows with empty text are skipped |
 
-Up to 2,000 rows per upload. Tagging takes roughly 1 second per review.
+Up to 2,000 rows per upload. Tested with 220 real reviews: about 85 seconds (roughly 0.4 s per review), no failures.
+
+**Quality checks on every review:** all 6 AI fields are filled; sentiment, category, urgency and language must come from the fixed lists; the summary must be English (never Tamil script) even for Tamil/Tanglish reviews. If the AI breaks a rule it is asked once more; if it still fails, the review is marked failed and can be retried from the sidebar.
+
+**Numbers are never guessed by the AI.** Every count, percentage and average on the dashboard is calculated with pandas from the review table (`frontend/report.py`, `frontend/trends.py`).
+
+**Excel-safe CSV:** exports are UTF-8 with a BOM (Tamil shows correctly) and any cell starting with `=`, `+`, `-` or `@` gets a leading `'` so customer text can never run as an Excel formula.
 
 ---
 
@@ -103,7 +109,8 @@ Up to 2,000 rows per upload. Tagging takes roughly 1 second per review.
 
 - **Summary cards:** total reviews, average rating, % positive, % negative, high-urgency count
 - **🚨 Action queue:** HIGH then MEDIUM reviews, with a ready-to-copy suggested reply
-- **📊 Insights:** sentiment split, topics by sentiment, weekly trend, urgency by platform, languages
+- **📊 Insights:** sentiment split, topics by sentiment, urgency by platform, languages
+- **📈 Trends:** latest week vs the week before (reviews, avg rating, % negative, high urgency, each with ▲/▼ change), plus weekly charts of rating, % negative, sentiment and high-urgency reviews. Weeks run Monday–Sunday; weeks with no reviews show as 0, not skipped.
 - **📋 All reviews:** full table and a CSV download (opens correctly in Excel, including Tamil)
 - **Filters:** urgency, sentiment, category, platform, language, date range
 
@@ -126,6 +133,33 @@ Interactive docs: **http://localhost:8000/docs**
 
 ---
 
+## Deploy to a server (e.g. Hostinger VPS)
+
+Use `docker-compose.prod.yml`, not `docker-compose.yml`. It is made for a public server:
+
+- Only the dashboard is open to the internet. The database and API have no public ports.
+- The dashboard asks for a password (`DASHBOARD_PASSWORD`).
+- Docker refuses to start if a required secret is missing.
+
+Set these environment variables on the server (in Hostinger's Docker Manager, or in a `.env` file next to the compose file):
+
+| Variable | Required | Notes |
+|---|---|---|
+| `OPENAI_API_KEY` | yes | Your OpenAI key |
+| `POSTGRES_PASSWORD` | yes | Long random password, **letters and numbers only** |
+| `DASHBOARD_PASSWORD` | yes | Password people type to open the dashboard |
+| `FRONTEND_PORT` | no | Port on the server, default `8502` |
+
+```bash
+git clone <this repo> && cd Customer-feedback_ai
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+Then open `http://<server-ip>:8502` (allow that port in the VPS firewall).
+The server database starts empty: upload your CSV from the dashboard.
+
+---
+
 ## Settings (`.env`)
 
 | Variable | Default | Purpose |
@@ -134,10 +168,13 @@ Interactive docs: **http://localhost:8000/docs**
 | `OPENAI_MODEL` | `gpt-4o-mini` | OpenAI model used for tagging |
 | `TAG_TEMPERATURE` | `0` | Randomness for tags (sentiment, category, urgency, language, summary). Keep at 0 so the same review always gets the same tags. |
 | `REPLY_TEMPERATURE` | `0.4` | Randomness for the suggested reply. 0.3–0.5 sounds natural; above 0.7 replies can drift off-script. |
+| `AI_CONCURRENCY` | `8` | Reviews sent to OpenAI at the same time. Lower it if you hit OpenAI rate limits. |
+| `AI_TIMEOUT_SECONDS` | `60` | Max time for one AI call, so a stuck call can't hang an upload. |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | `reviewlens` | Database login |
 | `POSTGRES_HOST` / `POSTGRES_PORT` | `localhost` / `5432` | Database address (local runs) |
 | `BACKEND_URL` | `http://localhost:8000` | Where the dashboard finds the API (local runs) |
 | `FRONTEND_PORT` | `8502` | Dashboard port on your computer (Docker) |
+| `DASHBOARD_PASSWORD` | — (off) | If set, the dashboard asks for this password. Required in `docker-compose.prod.yml`. |
 
 Never commit `.env`. It is already listed in `.gitignore`.
 
@@ -157,17 +194,23 @@ Never commit `.env`. It is already listed in `.gitignore`.
 
 ## Tests
 
-The backend has automated tests. They run offline in about a second: they use a throwaway
-SQLite database and a fake AI, so they need **no OpenAI key, cost nothing, and never touch your real data**.
+Both parts have automated tests. They run offline in a few seconds: a throwaway SQLite database,
+a fake AI and a fake backend, so they need **no OpenAI key, cost nothing, and never touch your real data**.
 
 ```bash
 cd backend
 pip install -r requirements-dev.txt
 python -m pytest
+
+cd ../frontend
+pip install -r requirements-dev.txt
+python -m pytest
 ```
 
-They cover CSV upload and clean-up, re-uploads (no repeat AI charges), AI failures and retry,
-every filter, CSV export (incl. Tamil text) and the delete safety check.
+- **Backend:** CSV upload and clean-up, re-uploads (no repeat AI charges), AI failures and retry,
+  tag/reply temperatures, every filter, CSV export (incl. Tamil text) and the delete safety check.
+- **Dashboard:** weekly trend maths (empty weeks, missing ratings/dates, week-over-week change) and
+  the whole dashboard rendered against a fake backend: every tab, filters, empty database, backend down.
 
 ---
 
@@ -191,11 +234,15 @@ Customer-feedback_ai/
 │   └── requirements-dev.txt   # + pytest
 ├── frontend/
 │   ├── app.py             # Streamlit dashboard
+│   ├── trends.py          # weekly trend numbers
+│   ├── report.py          # KPI numbers + Excel-safe CSV
+│   ├── tests/             # pytest tests (fake backend)
 │   ├── .streamlit/config.toml   # colour theme
 │   ├── Dockerfile
 │   └── requirements.txt
 ├── data/sample_reviews.csv      # 30 test reviews
-├── docker-compose.yml
+├── docker-compose.yml        # for your PC
+├── docker-compose.prod.yml   # for a public server
 ├── .env.example
 └── README.md
 ```

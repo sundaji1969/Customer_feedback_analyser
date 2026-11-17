@@ -1,12 +1,15 @@
 """Data shapes: what the AI must return, and what the API sends back."""
 import datetime as dt
+import re
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 Sentiment = Literal["positive", "neutral", "negative"]
 Urgency = Literal["HIGH", "MEDIUM", "LOW"]
 Language = Literal["English", "Tamil", "Tanglish", "Other"]
+TAMIL_SCRIPT = re.compile(r"[஀-௿]")
+
 Category = Literal[
     "Product Quality",
     "Delivery",
@@ -29,6 +32,19 @@ class ReviewTags(BaseModel):
     language: Language = Field(description="Language the review is written in.")
     summary: str = Field(description="One short sentence in ENGLISH summarising the review.")
 
+    @field_validator("summary")
+    @classmethod
+    def summary_is_english(cls, value: str) -> str:
+        """Every summary must be real English text, even for Tamil/Tanglish reviews."""
+        value = value.strip()
+        if not value:
+            raise ValueError("summary is empty")
+        if TAMIL_SCRIPT.search(value):
+            raise ValueError("summary must be in English, not Tamil script")
+        if not re.search(r"[A-Za-z]{2,}", value):
+            raise ValueError("summary must be English text")
+        return value
+
 
 class ReviewAnalysis(ReviewTags):
     """Tags + suggested reply for ONE review (what gets saved)."""
@@ -36,6 +52,14 @@ class ReviewAnalysis(ReviewTags):
     suggested_reply: str = Field(
         description="Polite reply to the customer, in the SAME language/style as the review."
     )
+
+    @field_validator("suggested_reply")
+    @classmethod
+    def reply_not_empty(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("suggested_reply is empty")
+        return value
 
 
 class ReviewOut(BaseModel):

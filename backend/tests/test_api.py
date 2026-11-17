@@ -204,6 +204,61 @@ def test_export_empty_still_has_header(client):
     assert header.startswith("review_id,date,platform,rating,review_text")
 
 
+def test_export_is_excel_safe(client):
+    """Customer text starting with = + - @ must not become an Excel formula."""
+    rows = [
+        {"review_id": "X1", "date": "2026-01-01", "platform": "Google", "rating": 1,
+         "review_text": '=HYPERLINK("http://evil.example","click")'},
+        {"review_id": "X2", "date": "2026-01-02", "platform": "@Swiggy", "rating": 2,
+         "review_text": "-ve experience, food late"},
+        {"review_id": "X3", "date": "2026-01-03", "platform": "Zomato", "rating": 5,
+         "review_text": "Nice food, 5 stars = happy"},   # '=' not at the start: unchanged
+    ]
+    upload(client, make_csv(rows))
+    res = client.get("/reviews/export")
+    assert b"\r\n" in res.content                       # Windows line endings for Excel
+    got = by_id(csv.DictReader(io.StringIO(res.content.decode("utf-8-sig"))))
+    assert got["X1"]["review_text"] == "'" + rows[0]["review_text"]
+    assert got["X2"]["review_text"] == "'-ve experience, food late"
+    assert got["X2"]["platform"] == "'@Swiggy"
+    assert got["X3"]["review_text"] == "Nice food, 5 stars = happy"
+    assert got["X3"]["rating"] == "5"                      # numbers are untouched
+
+
+# ---------- 200+ rows and field quality ----------
+
+ALLOWED = {
+    "sentiment": {"positive", "neutral", "negative"},
+    "category": {"Product Quality", "Delivery", "Customer Service", "Pricing", "App/Website",
+                 "Payment/Refund", "Staff Behaviour", "Cleanliness", "Other"},
+    "urgency": {"HIGH", "MEDIUM", "LOW"},
+    "language": {"English", "Tamil", "Tanglish", "Other"},
+}
+
+
+def test_250_rows_upload_and_every_review_gets_6_valid_fields(client, fake_ai):
+    texts = ["Food was great", "Delivery romba late", "Son got vomiting after eating",
+             "சாப்பாடு மிகவும் சுவையாக இருந்தது"]
+    rows = [{"review_id": f"B{i:03d}", "date": f"2026-10-{i % 28 + 1:02d}", "platform": "Google",
+             "rating": i % 5 + 1, "review_text": f"{texts[i % 4]} #{i}"} for i in range(250)]
+    res = upload(client, make_csv(rows))
+    assert res.status_code == 200
+    assert res.json()["analyzed"] == 250 and res.json()["failed"] == 0
+    assert max(len(c) for c in fake_ai.calls) <= 20         # saved in chunks, never all at once
+
+    reviews = client.get("/reviews?limit=20000").json()
+    assert len(reviews) == 250
+    for r in reviews:
+        for field, allowed in ALLOWED.items():
+            assert r[field] in allowed, (r["review_id"], field, r[field])
+        assert r["summary"].strip() and r["suggested_reply"].strip()
+        assert not any("஀" <= ch <= "௿" for ch in r["summary"])   # English summary
+
+    high = client.get("/reviews?urgency=HIGH&limit=20000").json()
+    assert len(high) == sum(1 for r in reviews if r["urgency"] == "HIGH") > 0
+    assert {r["urgency"] for r in high} == {"HIGH"}
+
+
 # ---------- delete ----------
 
 def test_delete_needs_confirm(client):

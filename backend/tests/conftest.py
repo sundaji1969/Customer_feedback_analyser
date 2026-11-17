@@ -41,7 +41,7 @@ def fake_analysis(review: dict) -> ReviewAnalysis:
         category=category,
         urgency=urgency,
         language=language,
-        summary=f"Summary of: {review['review_text'][:30]}",
+        summary=f"Customer wrote a {sentiment} review in {language}.",
         suggested_reply="Thank you for your feedback.",
     )
 

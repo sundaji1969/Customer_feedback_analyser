@@ -3,6 +3,7 @@
 Run locally (from the frontend folder):  streamlit run app.py
 The backend must be running first (see backend/app/main.py).
 """
+import hmac
 import os
 from datetime import date
 from pathlib import Path
@@ -12,6 +13,9 @@ import plotly.express as px
 import requests
 import streamlit as st
 from dotenv import load_dotenv
+
+from report import excel_csv, summary_numbers
+from trends import latest_change, weekly_sentiment, weekly_trends
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000").rstrip("/")
@@ -96,6 +100,23 @@ def style_fig(fig):
     return fig
 
 
+# ---------- password (only when DASHBOARD_PASSWORD is set, e.g. on a public server) ----------
+
+DASHBOARD_PASSWORD = os.getenv("DASHBOARD_PASSWORD", "")
+
+if DASHBOARD_PASSWORD and not st.session_state.get("logged_in"):
+    st.markdown('<div class="hero"><h1>🔎 ReviewLens</h1><p>Please log in to continue.</p></div>',
+                unsafe_allow_html=True)
+    with st.form("login"):
+        password = st.text_input("Password", type="password")
+        if st.form_submit_button("Log in"):
+            if hmac.compare_digest(password.encode(), DASHBOARD_PASSWORD.encode()):
+                st.session_state["logged_in"] = True
+                st.rerun()
+            st.error("Wrong password.")
+    st.stop()
+
+
 # ---------- backend calls ----------
 
 def backend_ok() -> bool:
@@ -105,9 +126,12 @@ def backend_ok() -> bool:
         return False
 
 
+MAX_REVIEWS = 20000  # the API's upper limit; the dashboard warns if there are more
+
+
 @st.cache_data(ttl=60, show_spinner=False)
 def load_reviews() -> pd.DataFrame:
-    resp = requests.get(f"{BACKEND_URL}/reviews", timeout=30)
+    resp = requests.get(f"{BACKEND_URL}/reviews", params={"limit": MAX_REVIEWS}, timeout=60)
     resp.raise_for_status()
     df = pd.DataFrame(resp.json())
     if df.empty:
@@ -128,6 +152,9 @@ def show_error(resp: requests.Response):
 # ---------- sidebar: upload ----------
 
 st.sidebar.title("🔎 ReviewLens")
+if DASHBOARD_PASSWORD and st.sidebar.button("Log out"):
+    st.session_state["logged_in"] = False
+    st.rerun()
 
 if not backend_ok():
     st.error(f"Cannot reach the backend at {BACKEND_URL}. Start it with `uvicorn app.main:app --reload`.")
@@ -179,6 +206,9 @@ except requests.RequestException as exc:
     st.error(f"Could not load reviews: {exc}")
     st.stop()
 
+if len(df) >= MAX_REVIEWS:
+    st.warning(f"Showing the newest {MAX_REVIEWS:,} reviews only. Older reviews are not counted below.")
+
 if df.empty:
     st.title("ReviewLens")
     st.info("No reviews yet. Upload a CSV from the sidebar (try `data/sample_reviews.csv`).")
@@ -228,12 +258,11 @@ st.markdown(
 )
 
 analyzed = view[view["analyzed_at"].notna()]
-avg = f"{view['rating'].mean():.1f}★" if view["rating"].notna().any() else "–"
-pos = (analyzed["sentiment"] == "positive").mean() * 100 if len(analyzed) else 0
-neg = (analyzed["sentiment"] == "negative").mean() * 100 if len(analyzed) else 0
-high = int((view["urgency"] == "HIGH").sum())
-cards = [("k1", "📝 Reviews", len(view)), ("k2", "⭐ Avg rating", avg), ("k3", "😊 Positive", f"{pos:.0f}%"),
-         ("k4", "😞 Negative", f"{neg:.0f}%"), ("k5", "🚨 High urgency", high)]
+nums = summary_numbers(view)  # calculated with pandas from the table below, never by the AI
+avg = "–" if nums["avg_rating"] is None else f"{nums['avg_rating']:.1f}★"
+cards = [("k1", "📝 Reviews", nums["reviews"]), ("k2", "⭐ Avg rating", avg),
+         ("k3", "😊 Positive", f"{nums['pct_positive']:.0f}%"), ("k4", "😞 Negative", f"{nums['pct_negative']:.0f}%"),
+         ("k5", "🚨 High urgency", nums["high_urgency"])]
 st.markdown(
     '<div class="kpis">'
     + "".join(f'<div class="kpi {c}"><div class="label">{l}</div><div class="value">{v}</div></div>' for c, l, v in cards)
@@ -247,7 +276,9 @@ if not_done:
 
 # ---------- tabs ----------
 
-tab_urgent, tab_charts, tab_all = st.tabs(["🚨 Action queue", "📊 Insights", "📋 All reviews"])
+tab_urgent, tab_charts, tab_trends, tab_all = st.tabs(
+    ["🚨 Action queue", "📊 Insights", "📈 Trends", "📋 All reviews"]
+)
 
 with tab_urgent:
     queue = view[view["urgency"].isin(["HIGH", "MEDIUM"])].copy()
@@ -292,23 +323,69 @@ with tab_charts:
 
         left, right = st.columns(2)
         with left:
-            dated = analyzed.dropna(subset=["date"])
-            if not dated.empty:
-                weekly = (dated.set_index("date").groupby("sentiment").resample("W").size()
-                          .reset_index(name="count"))
-                fig = px.line(weekly, x="date", y="count", color="sentiment", markers=True,
-                              title="Reviews per week", color_discrete_map=SENTIMENT_COLORS)
-                st.plotly_chart(style_fig(fig), width="stretch")
-        with right:
             plat = analyzed.groupby(["platform", "urgency"]).size().reset_index(name="count")
             fig = px.bar(plat, x="platform", y="count", color="urgency", title="Urgency by platform",
                          color_discrete_map=URGENCY_COLORS, category_orders={"urgency": URGENCY_ORDER})
             st.plotly_chart(style_fig(fig), width="stretch")
+        with right:
+            lang = analyzed["language"].value_counts().reset_index()
+            fig = px.bar(lang, x="language", y="count", title="Review language", color="language",
+                         color_discrete_sequence=PALETTE)
+            st.plotly_chart(style_fig(fig), width="stretch")
 
-        lang = analyzed["language"].value_counts().reset_index()
-        fig = px.bar(lang, x="language", y="count", title="Review language", color="language",
-                     color_discrete_sequence=PALETTE)
-        st.plotly_chart(style_fig(fig), width="stretch")
+with tab_trends:
+    trends = weekly_trends(analyzed)
+    if len(trends) < 2:
+        st.info("Trends need analyzed reviews with dates from at least 2 different weeks.")
+    else:
+        change = latest_change(trends)
+        week = change["week"]
+        st.markdown(
+            f"**Latest week** (week of {week:%d %b %Y}) compared with the week before. "
+            "Weeks are Monday to Sunday; reviews without a date are left out."
+        )
+
+        def fmt(value, pattern):
+            return "–" if pd.isna(value) else pattern.format(value)
+
+        def delta(diff, pattern):
+            return None if diff is None else pattern.format(diff)
+
+        c1, c2, c3, c4 = st.columns(4)
+        n, d = change["reviews"]
+        c1.metric("📝 Reviews", fmt(n, "{:.0f}"), delta(d, "{:+.0f}"), delta_color="off", border=True)
+        n, d = change["avg_rating"]
+        c2.metric("⭐ Avg rating", fmt(n, "{:.1f}★"), delta(d, "{:+.1f}★"), border=True)
+        n, d = change["pct_negative"]
+        c3.metric("😞 Negative", fmt(n, "{:.0f}%"), delta(d, "{:+.0f} pts"), delta_color="inverse", border=True)
+        n, d = change["high_urgency"]
+        c4.metric("🚨 High urgency", fmt(n, "{:.0f}"), delta(d, "{:+.0f}"), delta_color="inverse", border=True)
+
+        weekly = trends.reset_index()
+        left, right = st.columns(2)
+        with left:
+            fig = px.line(weekly, x="week", y="avg_rating", markers=True, title="Average rating per week",
+                          labels={"week": "Week", "avg_rating": "Avg rating"}, range_y=[0.5, 5.5])
+            fig.update_traces(line_color="#f59e0b", connectgaps=False)
+            st.plotly_chart(style_fig(fig), width="stretch")
+        with right:
+            fig = px.line(weekly, x="week", y="pct_negative", markers=True, title="% negative reviews per week",
+                          labels={"week": "Week", "pct_negative": "% negative"}, range_y=[-5, 105])
+            fig.update_traces(line_color=SENTIMENT_COLORS["negative"], connectgaps=False)
+            st.plotly_chart(style_fig(fig), width="stretch")
+
+        left, right = st.columns(2)
+        with left:
+            fig = px.bar(weekly_sentiment(analyzed), x="week", y="count", color="sentiment",
+                         title="Reviews per week by sentiment", color_discrete_map=SENTIMENT_COLORS,
+                         category_orders={"sentiment": ["negative", "neutral", "positive"]},
+                         labels={"week": "Week", "count": "Reviews"})
+            st.plotly_chart(style_fig(fig), width="stretch")
+        with right:
+            fig = px.bar(weekly, x="week", y="high_urgency", title="High-urgency reviews per week",
+                         labels={"week": "Week", "high_urgency": "High urgency"})
+            fig.update_traces(marker_color=URGENCY_COLORS["HIGH"])
+            st.plotly_chart(style_fig(fig), width="stretch")
 
 with tab_all:
     columns = ["review_id", "date", "platform", "rating", "sentiment", "urgency", "category",
@@ -323,7 +400,7 @@ with tab_all:
     export["date"] = export["date"].dt.date
     st.download_button(
         "⬇️ Download filtered reviews (CSV)",
-        data=export.to_csv(index=False).encode("utf-8-sig"),  # utf-8-sig so Excel shows Tamil
+        data=excel_csv(export),  # Tamil shows correctly, customer text can't run as a formula
         file_name=f"reviewlens_export_{date.today().isoformat()}.csv",
         mime="text/csv",
     )
