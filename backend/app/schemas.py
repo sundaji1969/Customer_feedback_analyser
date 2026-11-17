@@ -20,14 +20,19 @@ Category = Literal[
 ]
 
 
-class ReviewAnalysis(BaseModel):
-    """The AI's tags for ONE review."""
+class ReviewTags(BaseModel):
+    """What the AI must return in the tagging step for ONE review."""
 
     sentiment: Sentiment = Field(description="Overall feeling of the customer.")
     category: Category = Field(description="Main topic of the review.")
     urgency: Urgency = Field(description="How fast the business must respond.")
     language: Language = Field(description="Language the review is written in.")
     summary: str = Field(description="One short sentence in ENGLISH summarising the review.")
+
+
+class ReviewAnalysis(ReviewTags):
+    """Tags + suggested reply for ONE review (what gets saved)."""
+
     suggested_reply: str = Field(
         description="Polite reply to the customer, in the SAME language/style as the review."
     )

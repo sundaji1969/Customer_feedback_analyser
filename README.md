@@ -28,7 +28,7 @@ For every review the AI gives:
 - **AI:** LangChain + OpenAI `gpt-4o-mini` with structured output (`backend/app/analyzer.py`)
 - **Database:** PostgreSQL 16
 
-Reviews are tagged 5 at a time and saved every 20, so a failure part-way does not lose finished work. Re-uploading a file only re-tags reviews that are new or whose text changed.
+Each review gets two AI calls: one for the tags at temperature 0 (consistent), then one for the suggested reply at 0.4 (natural wording; it sees the tags, so HIGH-urgency reviews get a more serious reply). Reviews are tagged 5 at a time and saved every 20, so a failure part-way does not lose finished work. Re-uploading a file only re-tags reviews that are new or whose text changed.
 
 ---
 
@@ -132,6 +132,8 @@ Interactive docs: **http://localhost:8000/docs**
 |---|---|---|
 | `OPENAI_API_KEY` | — | Required |
 | `OPENAI_MODEL` | `gpt-4o-mini` | OpenAI model used for tagging |
+| `TAG_TEMPERATURE` | `0` | Randomness for tags (sentiment, category, urgency, language, summary). Keep at 0 so the same review always gets the same tags. |
+| `REPLY_TEMPERATURE` | `0.4` | Randomness for the suggested reply. 0.3–0.5 sounds natural; above 0.7 replies can drift off-script. |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | `reviewlens` | Database login |
 | `POSTGRES_HOST` / `POSTGRES_PORT` | `localhost` / `5432` | Database address (local runs) |
 | `BACKEND_URL` | `http://localhost:8000` | Where the dashboard finds the API (local runs) |
