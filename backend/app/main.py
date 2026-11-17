@@ -13,10 +13,11 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
+from .alerts import send_high_urgency_alert
 from .analyzer import analyze_reviews
 from .database import get_db, init_db
 from .models import Review
-from .schemas import ReviewOut, UploadResult
+from .schemas import ReplyRating, ReviewOut, UploadResult
 
 REQUIRED_COLUMNS = ["review_id", "date", "platform", "rating", "review_text"]
 MAX_ROWS_PER_UPLOAD = 2000
@@ -79,14 +80,16 @@ def _parse_dates(values: pd.Series) -> pd.Series:
     return iso.fillna(other).dt.date
 
 
-def _analyze_pending(db: Session, review_ids: list[str] | None = None) -> tuple[int, int, list[str]]:
-    """Run the AI on reviews that have not been analyzed yet."""
+def _analyze_pending(db: Session, review_ids: list[str] | None = None) -> tuple[int, int, list[str], list[dict]]:
+    """Run the AI on reviews that have not been analyzed yet.
+
+    Returns (analyzed, failed, errors, new HIGH-urgency reviews for the alert email)."""
     query = select(Review).where(Review.analyzed_at.is_(None))
     if review_ids is not None:
         query = query.where(Review.review_id.in_(review_ids))
     pending = db.scalars(query).all()
 
-    analyzed, failed, errors = 0, 0, []
+    analyzed, failed, errors, high = 0, 0, [], []
     for start in range(0, len(pending), ANALYZE_CHUNK):
         chunk = pending[start : start + ANALYZE_CHUNK]
         try:
@@ -105,9 +108,15 @@ def _analyze_pending(db: Session, review_ids: list[str] | None = None) -> tuple[
             for field, value in result.model_dump().items():
                 setattr(review, field, value)
             review.analyzed_at = datetime.now()
+            # a new reply was written, so an old rating of the previous reply no longer applies
+            review.reply_rating = review.reply_note = review.reply_rated_at = None
             analyzed += 1
+            if review.urgency == "HIGH":
+                high.append({c: getattr(review, c) for c in (
+                    "review_id", "date", "platform", "rating", "category",
+                    "summary", "review_text", "suggested_reply")})
         db.commit()
-    return analyzed, failed, errors
+    return analyzed, failed, errors, high
 
 
 def excel_safe(value):
@@ -183,7 +192,7 @@ def upload_reviews(file: UploadFile = File(...), db: Session = Depends(get_db)):
             updated_count += 1
     db.commit()
 
-    analyzed, failed, errors = _analyze_pending(db, ids)
+    analyzed, failed, errors, high = _analyze_pending(db, ids)
     return UploadResult(
         rows_in_file=len(df),
         new_reviews=new_count,
@@ -191,14 +200,32 @@ def upload_reviews(file: UploadFile = File(...), db: Session = Depends(get_db)):
         analyzed=analyzed,
         failed=failed,
         errors=errors,
+        alert=send_high_urgency_alert(high),
     )
 
 
 @app.post("/reviews/analyze-pending")
 def analyze_pending(db: Session = Depends(get_db)):
     """Retry the AI on any reviews that failed or were never analyzed."""
-    analyzed, failed, errors = _analyze_pending(db)
-    return {"analyzed": analyzed, "failed": failed, "errors": errors}
+    analyzed, failed, errors, high = _analyze_pending(db)
+    return {"analyzed": analyzed, "failed": failed, "errors": errors,
+            "alert": send_high_urgency_alert(high)}
+
+
+@app.post("/reviews/rate-reply", response_model=ReviewOut)
+def rate_reply(body: ReplyRating, db: Session = Depends(get_db)):
+    """Staff mark a suggested reply as good or bad (with an optional note). rating=null clears it."""
+    review = db.scalar(select(Review).where(Review.review_id == body.review_id))
+    if review is None:
+        raise HTTPException(404, f"No review with id {body.review_id!r}.")
+    if review.suggested_reply is None:
+        raise HTTPException(400, "This review has no suggested reply yet.")
+    review.reply_rating = body.rating
+    review.reply_note = body.note if body.rating else None
+    review.reply_rated_at = datetime.now() if body.rating else None
+    db.commit()
+    db.refresh(review)
+    return review
 
 
 @app.get("/reviews", response_model=list[ReviewOut])

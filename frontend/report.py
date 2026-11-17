@@ -22,6 +22,46 @@ def summary_numbers(view: pd.DataFrame) -> dict:
     }
 
 
+def reply_quality(with_reply: pd.DataFrame) -> dict:
+    """Numbers for the Reply quality tab, over reviews that have a suggested reply.
+    % good is over RATED replies only; unrated replies are not counted as good or bad."""
+    rated = with_reply[with_reply["reply_rating"].isin(["good", "bad"])]
+    good = int((rated["reply_rating"] == "good").sum())
+    by_language = None
+    if not rated.empty:
+        by_language = (
+            rated.assign(good=rated["reply_rating"] == "good")
+            .groupby("language")["good"].agg(["mean", "size"]).reset_index()
+            .rename(columns={"mean": "pct_good", "size": "rated"})
+        )
+        by_language["pct_good"] *= 100
+        by_language["label"] = by_language.apply(lambda r: f"{r.pct_good:.0f}% of {r.rated}", axis=1)
+    return {
+        "replies": len(with_reply),
+        "rated": len(rated),
+        "bad": len(rated) - good,
+        "pct_good": good / len(rated) * 100 if len(rated) else None,
+        "by_language": by_language,
+    }
+
+
+SEARCH_COLUMNS =["review_id", "review_text", "summary", "suggested_reply"]
+
+
+def search(view: pd.DataFrame, text: str) -> pd.DataFrame:
+    """Reviews containing ALL the words typed (any order, any case), in the review text,
+    the English summary, the reply or the ID. Works for Tamil, Tanglish and English:
+    "cold" finds the Tamil review whose English summary says the food was cold."""
+    words = text.lower().split()
+    if not words:
+        return view
+    haystack = view[SEARCH_COLUMNS].fillna("").astype(str).agg(" ".join, axis=1).str.lower()
+    keep = pd.Series(True, index=view.index)
+    for word in words:
+        keep &= haystack.str.contains(word, regex=False)  # plain text, so "?" or "(" are safe
+    return view[keep]
+
+
 def excel_safe(value):
     """Customer text starting with = + - @ would run as a FORMULA in Excel (and show #NAME?
     or worse). A leading apostrophe makes Excel treat the cell as plain text."""

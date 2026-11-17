@@ -59,7 +59,7 @@ def test_dashboard_renders_all_tabs_without_errors():
     at = run_app(REVIEWS)
     assert not at.exception, [e.value for e in at.exception]
     assert not at.error
-    assert [t.label for t in at.tabs] == ["🚨 Action queue", "📊 Insights", "📈 Trends", "📋 All reviews"]
+    assert [t.label for t in at.tabs] == ["🚨 Action queue", "📊 Insights", "📈 Trends", "⭐ Reply quality", "📋 All reviews"]
     assert "showing <b>5</b> of 5 reviews" in markdown_text(at)
 
 
@@ -78,7 +78,7 @@ def test_trends_tab_explains_when_not_enough_weeks():
     at = run_app(REVIEWS[:2])  # both in the same week
     assert not at.exception
     assert any("at least 2 different weeks" in i.value for i in at.info)
-    assert not at.metric
+    assert "📝 Reviews" not in [m.label for m in at.metric]  # no trend numbers
 
 
 def test_empty_database_shows_upload_hint():
@@ -108,8 +108,8 @@ def test_backend_down_shows_clear_error():
 def test_no_password_set_means_no_login(monkeypatch):
     monkeypatch.delenv("DASHBOARD_PASSWORD", raising=False)
     at = run_app(REVIEWS)
-    assert not at.text_input  # no password box
-    assert len(at.tabs) == 4
+    assert not any(t.label == "Password" for t in at.text_input)  # no password box
+    assert len(at.tabs) == 5
 
 
 def test_password_protects_dashboard(monkeypatch):
@@ -128,7 +128,91 @@ def test_password_protects_dashboard(monkeypatch):
         at.text_input[0].input("s3cret-pass")
         at.button[0].click().run()
         assert not at.exception
-        assert len(at.tabs) == 4           # logged in
+        assert len(at.tabs) == 5           # logged in
 
         next(b for b in at.button if b.label == "Log out").click().run()
         assert not at.tabs                 # logged out again
+
+
+# ---------- search ----------
+
+def test_search_box_narrows_the_view():
+    at = run_app(REVIEWS)
+    with patch("requests.get", side_effect=fake_get(REVIEWS)):
+        box = next(t for t in at.text_input if t.label == "🔍 Search")
+        box.input("summary 3").run()
+    assert not at.exception
+    assert "showing <b>1</b> of 5 reviews" in markdown_text(at)
+
+
+def test_search_with_no_match_does_not_crash():
+    at = run_app(REVIEWS)
+    with patch("requests.get", side_effect=fake_get(REVIEWS)):
+        next(t for t in at.text_input if t.label == "🔍 Search").input("no such words").run()
+    assert not at.exception
+    assert "showing <b>0</b> of 5 reviews" in markdown_text(at)
+
+
+# ---------- reply ratings ----------
+
+RATED = [
+    {**REVIEWS[0], "reply_rating": "good", "reply_note": None},
+    {**REVIEWS[1], "reply_rating": "bad", "reply_note": "Did not ask how they are"},
+    *[{**r, "reply_rating": None, "reply_note": None} for r in REVIEWS[2:]],
+]
+
+
+def test_reply_quality_tab_shows_numbers_and_bad_replies():
+    at = run_app(RATED)
+    assert not at.exception, [e.value for e in at.exception]
+    metrics = {m.label: m.value for m in at.metric}
+    assert metrics["📝 Replies rated"] == "2 of 5"
+    assert metrics["👍 Rated good"] == "50%"
+    assert metrics["👎 Rated bad"] == "1"
+    assert any("Rate more replies (3 not rated yet)" in s.value for s in at.subheader)
+
+
+def test_rating_button_sends_rating_and_note_to_backend():
+    at = run_app(RATED)
+    posted = MagicMock(return_value=MagicMock(ok=True, status_code=200))
+    with patch("requests.get", side_effect=fake_get(RATED)), patch("requests.post", posted):
+        at.text_input(key="note-queue-R3").input("too formal")
+        at.button(key="bad-queue-R3").click().run()
+    assert not at.exception
+    url, kwargs = posted.call_args.args[0], posted.call_args.kwargs
+    assert url.endswith("/reviews/rate-reply")
+    assert kwargs["json"] == {"review_id": "R3", "rating": "bad", "note": "too formal"}
+
+
+def test_good_button_sends_no_note():
+    at = run_app(RATED)
+    posted = MagicMock(return_value=MagicMock(ok=True, status_code=200))
+    with patch("requests.get", side_effect=fake_get(RATED)), patch("requests.post", posted):
+        at.button(key="good-rate-R3").click().run()
+    assert posted.call_args.kwargs["json"] == {"review_id": "R3", "rating": "good", "note": None}
+
+
+def test_rated_reply_shows_its_rating_and_can_be_cleared():
+    at = run_app(RATED)
+    # R2 (HIGH, in the queue) is rated bad with a note
+    assert any(c.value == "Rated: 👎 bad — “Did not ask how they are”" for c in at.caption)
+    assert not at.button(key="good-queue-R2").disabled
+    posted = MagicMock(return_value=MagicMock(ok=True, status_code=200))
+    with patch("requests.get", side_effect=fake_get(RATED)), patch("requests.post", posted):
+        at.button(key="clear-queue-R2").click().run()
+    assert posted.call_args.kwargs["json"] == {"review_id": "R2", "rating": None, "note": None}
+    # unrated replies have no Clear button
+    assert not any(b.key == "clear-queue-R3" for b in at.button)
+
+
+def test_rated_good_reply_cannot_be_rated_good_again():
+    rows = [{**r, "reply_rating": "good" if r["review_id"] == "R3" else None, "reply_note": None} for r in REVIEWS]
+    at = run_app(rows)
+    assert at.button(key="good-queue-R3").disabled
+    assert not at.button(key="bad-queue-R3").disabled
+
+
+def test_dashboard_works_with_backend_that_has_no_ratings_yet():
+    at = run_app(REVIEWS)  # no reply_rating / reply_note fields at all
+    assert not at.exception
+    assert {m.label: m.value for m in at.metric}["📝 Replies rated"] == "0 of 5"

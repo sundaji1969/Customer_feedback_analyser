@@ -27,5 +27,10 @@ class Review(Base):
     summary: Mapped[str | None] = mapped_column(Text)
     suggested_reply: Mapped[str | None] = mapped_column(Text)
 
+    # --- Staff feedback on the suggested reply (reset when the AI writes a new reply) ---
+    reply_rating: Mapped[str | None] = mapped_column(String(10), index=True)  # good/bad
+    reply_note: Mapped[str | None] = mapped_column(Text)
+    reply_rated_at: Mapped[dt.datetime | None] = mapped_column(DateTime)
+
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, server_default=func.now())
     analyzed_at: Mapped[dt.datetime | None] = mapped_column(DateTime)

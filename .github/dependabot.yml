@@ -1,0 +1,29 @@
+# GitHub opens pull requests when a dependency has a new version. CI (tests.yml) tests each one;
+# merge it when the checks are green. Small updates are grouped into one PR per folder.
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /backend
+    schedule: { interval: weekly, day: monday }
+    groups:
+      backend-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: pip
+    directory: /frontend
+    schedule: { interval: weekly, day: monday }
+    groups:
+      frontend-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly, day: monday }
+
+  - package-ecosystem: docker
+    directories: [/backend, /frontend]
+    schedule: { interval: weekly, day: monday }
+    ignore:
+      # Stay on Python 3.12 (matches CI); patch/security updates of 3.12 still come through.
+      - dependency-name: python
+        update-types: [version-update:semver-major, version-update:semver-minor]

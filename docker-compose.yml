@@ -36,6 +36,14 @@ services:
       REPLY_TEMPERATURE: ${REPLY_TEMPERATURE:-0.4}
       AI_CONCURRENCY: ${AI_CONCURRENCY:-8}
       AI_TIMEOUT_SECONDS: ${AI_TIMEOUT_SECONDS:-60}
+      # Optional email alert for new HIGH-urgency reviews (off unless ALERT_EMAIL_TO and SMTP_HOST are set)
+      ALERT_EMAIL_TO: ${ALERT_EMAIL_TO:-}
+      ALERT_EMAIL_FROM: ${ALERT_EMAIL_FROM:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      DASHBOARD_URL: ${DASHBOARD_URL:-}
       # Inside Docker the database host is the service name "db", not localhost
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
     ports:

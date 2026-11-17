@@ -102,3 +102,53 @@ def test_excel_csv_keeps_tamil_and_blocks_formulas():
     assert rows[0]["review_text"].startswith("'=")
     assert rows[1]["review_text"] == "சாப்பாடு நன்று, \"semma\"\nnew line"   # quotes/newlines survive
     assert rows[1]["rating"] == ""
+
+
+# ---------- search ----------
+
+from report import reply_quality, search  # noqa: E402
+
+SEARCH_TABLE = pd.DataFrame([
+    {"review_id": "R001", "review_text": "Biryani was cold", "summary": "Food arrived cold.", "suggested_reply": "Sorry!"},
+    {"review_id": "R002", "review_text": "சாப்பாடு குளிர்ந்து இருந்தது", "summary": "The food was COLD and late.",
+     "suggested_reply": "மன்னிக்கவும்"},
+    {"review_id": "R003", "review_text": "Refund (still) pending?", "summary": None, "suggested_reply": None},
+])
+
+
+@pytest.mark.parametrize("text, expected", [
+    ("", ["R001", "R002", "R003"]),          # empty search shows everything
+    ("   ", ["R001", "R002", "R003"]),
+    ("cold", ["R001", "R002"]),              # Tamil review found through its English summary
+    ("COLD late", ["R002"]),                 # all words must match, any case, any order
+    ("late cold", ["R002"]),
+    ("r003", ["R003"]),                      # by review id
+    ("(still) pending?", ["R003"]),          # brackets / ? are plain text, not regex
+    ("குளிர்ந்து", ["R002"]),                # Tamil search
+    ("மன்னிக்கவும்", ["R002"]),               # in the reply
+    ("pizza", []),
+])
+def test_search(text, expected):
+    assert search(SEARCH_TABLE, text)["review_id"].tolist() == expected
+
+
+# ---------- reply quality ----------
+
+def test_reply_quality_counts_rated_replies_only():
+    table = pd.DataFrame([
+        {"language": "English", "reply_rating": "good"},
+        {"language": "English", "reply_rating": "bad"},
+        {"language": "Tanglish", "reply_rating": "good"},
+        {"language": "Tanglish", "reply_rating": None},   # not rated: not good, not bad
+    ])
+    q = reply_quality(table)
+    assert (q["replies"], q["rated"], q["bad"]) == (4, 3, 1)
+    assert q["pct_good"] == pytest.approx(2 / 3 * 100)
+    by_lang = q["by_language"].set_index("language")
+    assert by_lang.loc["English", "pct_good"] == 50 and by_lang.loc["Tanglish", "pct_good"] == 100
+    assert by_lang.loc["English", "label"] == "50% of 2"
+
+
+def test_reply_quality_with_nothing_rated():
+    q = reply_quality(pd.DataFrame({"language": ["English"], "reply_rating": [None]}))
+    assert (q["rated"], q["pct_good"], q["by_language"]) == (0, None, None)

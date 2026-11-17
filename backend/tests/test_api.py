@@ -34,7 +34,7 @@ def test_upload_saves_and_tags_reviews(client, fake_ai):
     assert res.status_code == 200
     assert res.json() == {
         "rows_in_file": 4, "new_reviews": 4, "updated_reviews": 0,
-        "analyzed": 4, "failed": 0, "errors": [],
+        "analyzed": 4, "failed": 0, "errors": [], "alert": None,
     }
 
     reviews = by_id(client.get("/reviews").json())
@@ -130,7 +130,7 @@ def test_failed_reviews_are_reported_and_can_be_retried(client, fake_ai):
 
     fake_ai.fail_texts = set()  # AI works again
     retry = client.post("/reviews/analyze-pending").json()
-    assert retry == {"analyzed": 1, "failed": 0, "errors": []}
+    assert retry == {"analyzed": 1, "failed": 0, "errors": [], "alert": None}
     assert by_id(client.get("/reviews").json())["R1"]["sentiment"] == "positive"
 
 

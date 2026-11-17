@@ -108,11 +108,18 @@ Up to 2,000 rows per upload. Tested with 220 real reviews: about 85 seconds (rou
 ## Dashboard
 
 - **Summary cards:** total reviews, average rating, % positive, % negative, high-urgency count
-- **🚨 Action queue:** HIGH then MEDIUM reviews, with a ready-to-copy suggested reply
+- **🚨 Action queue:** HIGH then MEDIUM reviews, with a ready-to-copy suggested reply and 👍/👎 to rate it
 - **📊 Insights:** sentiment split, topics by sentiment, urgency by platform, languages
 - **📈 Trends:** latest week vs the week before (reviews, avg rating, % negative, high urgency, each with ▲/▼ change), plus weekly charts of rating, % negative, sentiment and high-urgency reviews. Weeks run Monday–Sunday; weeks with no reviews show as 0, not skipped.
-- **📋 All reviews:** full table and a CSV download (opens correctly in Excel, including Tamil)
-- **Filters:** urgency, sentiment, category, platform, language, date range
+- **⭐ Reply quality:** staff rate suggested replies 👍/👎 with an optional note. Shows % rated good
+  (overall and per language), more replies to rate, and every 👎 reply with its note, so you can
+  see what the AI gets wrong and improve the prompt. A rating is cleared when the AI writes a new reply.
+- **📋 All reviews:** full table and a CSV download of exactly what is shown (opens correctly in Excel, including Tamil)
+- **Filters:** 🔍 search (all words, in the review, English summary, reply or ID — so `cold` also finds
+  a Tamil review whose summary says the food was cold), urgency, sentiment, category, platform, language, date range
+- **📧 Email alert (optional):** after an upload, one email lists every new HIGH-urgency review with the
+  customer's text and the suggested reply. Set `ALERT_EMAIL_TO` and the `SMTP_*` settings to switch it on.
+  The dashboard shows whether the email was sent; a mail problem never stops the upload.
 
 Always read and edit suggested replies before posting them.
 
@@ -129,6 +136,7 @@ Interactive docs: **http://localhost:8000/docs**
 | POST | `/reviews/analyze-pending` | Retry reviews that failed or were never tagged |
 | GET | `/reviews` | List reviews (filters: `urgency`, `sentiment`, `category`, `platform`, `language`, `start_date`, `end_date`) |
 | GET | `/reviews/export` | Download reviews as CSV (same filters) |
+| POST | `/reviews/rate-reply` | Rate a suggested reply: `{"review_id": "R1", "rating": "good" or "bad" or null, "note": "..."}` |
 | DELETE | `/reviews?confirm=true` | Delete **all** reviews |
 
 ---
@@ -192,6 +200,11 @@ Update later with `git pull` and the same command (the database is kept).
 | `BACKEND_URL` | `http://localhost:8000` | Where the dashboard finds the API (local runs) |
 | `FRONTEND_PORT` | `8502` | Dashboard port on your computer (Docker) |
 | `DASHBOARD_PASSWORD` | — (off) | If set, the dashboard asks for this password. Required in `docker-compose.prod.yml`. |
+| `ALERT_EMAIL_TO` | — (off) | Who gets the high-urgency email. Several: `a@x.com, b@y.com` |
+| `SMTP_HOST` / `SMTP_PORT` | — / `587` | Mail server. Gmail: `smtp.gmail.com`, `587`. Port `465` uses SSL. |
+| `SMTP_USER` / `SMTP_PASSWORD` | — | Mail login. For Gmail use an **App Password**, not your normal password. |
+| `ALERT_EMAIL_FROM` | `SMTP_USER` | Sender address |
+| `DASHBOARD_URL` | — | Link to the dashboard, included in the email |
 
 Never commit `.env`. It is already listed in `.gitignore`.
 
@@ -225,9 +238,11 @@ python -m pytest
 ```
 
 - **Backend:** CSV upload and clean-up, re-uploads (no repeat AI charges), AI failures and retry,
-  tag/reply temperatures, every filter, CSV export (incl. Tamil text) and the delete safety check.
+  tag/reply temperatures, every filter, CSV export (incl. Tamil text), the delete safety check,
+  reply ratings, upgrading an existing database, and alert emails (fake mail server, failures).
 - **Dashboard:** weekly trend maths (empty weeks, missing ratings/dates, week-over-week change) and
-  the whole dashboard rendered against a fake backend: every tab, filters, empty database, backend down.
+  the whole dashboard rendered against a fake backend: every tab, filters, search, 👍/👎 buttons,
+  empty database, backend down.
 
 **AI quality check (uses your OpenAI key, costs a few cents):** `data/eval_reviews.csv` holds 41
 hand-labelled reviews (English, Tamil, Tanglish, sarcasm, wrong star ratings, health and fraud cases).
@@ -244,6 +259,8 @@ It scores each tag against the labels and checks every reply: right language and
 copied from the prompt's examples, no refund promises, not too long. Read some replies yourself too.
 
 **Automatic:** GitHub runs both test suites, and checks that the Docker images build, on every push and pull request (`.github/workflows/tests.yml`). See the repo's **Actions** tab.
+
+**Dependency updates:** Dependabot (`.github/dependabot.yml`) opens pull requests every Monday when a Python package, GitHub Action or the Docker base image has a new version. Small updates come grouped in one PR per folder. CI tests each PR: merge it when the checks are green.
 
 ---
 

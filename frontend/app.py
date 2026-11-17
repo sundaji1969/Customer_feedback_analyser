@@ -14,7 +14,7 @@ import requests
 import streamlit as st
 from dotenv import load_dotenv
 
-from report import excel_csv, summary_numbers
+from report import excel_csv, reply_quality, search, summary_numbers
 from trends import latest_change, weekly_sentiment, weekly_trends
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
@@ -138,6 +138,9 @@ def load_reviews() -> pd.DataFrame:
         return df
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
     df["rating"] = pd.to_numeric(df["rating"], errors="coerce")
+    for column in ("reply_rating", "reply_note"):
+        if column not in df:
+            df[column] = None
     return df
 
 
@@ -147,6 +150,51 @@ def show_error(resp: requests.Response):
     except ValueError:
         detail = resp.text
     st.sidebar.error(f"Error {resp.status_code}: {detail}")
+
+
+def show_alert(message: str | None):
+    """Result of the high-urgency email (only when one was due)."""
+    if not message:
+        return
+    if "FAILED" in message:
+        st.sidebar.warning(f"📧 {message}")
+    else:
+        st.sidebar.info(f"📧 {message}")
+
+
+def save_rating(review_id: str, rating: str | None, note_key: str | None = None):
+    """Button callback: store a 👍/👎 for one suggested reply."""
+    note = st.session_state.get(note_key, "") if note_key else None
+    try:
+        resp = requests.post(f"{BACKEND_URL}/reviews/rate-reply",
+                             json={"review_id": review_id, "rating": rating, "note": note}, timeout=15)
+    except requests.RequestException as exc:
+        st.toast(f"Could not save rating: {exc}", icon="⚠️")
+        return
+    if not resp.ok:
+        st.toast(f"Could not save rating (error {resp.status_code}).", icon="⚠️")
+        return
+    load_reviews.clear()
+    st.toast({"good": "Marked as a good reply 👍", "bad": "Marked as a bad reply 👎"}.get(rating, "Rating cleared"))
+
+
+def rating_widget(r, where: str):
+    """👍/👎 buttons and an optional note for one suggested reply."""
+    if not r["suggested_reply"]:
+        return
+    key = f"{where}-{r['review_id']}"
+    current = r["reply_rating"] if isinstance(r["reply_rating"], str) else None
+    if current:
+        note = f" — “{r['reply_note']}”" if isinstance(r["reply_note"], str) and r["reply_note"] else ""
+        st.caption(f"Rated: {'👍 good' if current == 'good' else '👎 bad'}{note}")
+    good, bad, note_col, clear = st.columns([1, 1, 4, 1], vertical_alignment="bottom")
+    good.button("👍 Good", key=f"good-{key}", on_click=save_rating, args=(r["review_id"], "good"),
+                disabled=current == "good")
+    note_col.text_input("What should change? (optional, saved with 👎)", key=f"note-{key}",
+                        placeholder="e.g. too formal, wrong language, missed the refund")
+    bad.button("👎 Bad", key=f"bad-{key}", on_click=save_rating, args=(r["review_id"], "bad", f"note-{key}"))
+    if current:
+        clear.button("Clear", key=f"clear-{key}", on_click=save_rating, args=(r["review_id"], None))
 
 
 # ---------- sidebar: upload ----------
@@ -184,6 +232,7 @@ if uploaded is not None and st.sidebar.button("Upload & analyze", type="primary"
             )
             for err in r.get("errors", []):
                 st.sidebar.warning(err)
+            show_alert(r.get("alert"))
             load_reviews.clear()
         else:
             show_error(resp)
@@ -194,6 +243,7 @@ if st.sidebar.button("Retry un-analyzed reviews"):
     if resp.ok:
         r = resp.json()
         st.sidebar.success(f"{r['analyzed']} analyzed, {r['failed']} failed.")
+        show_alert(r.get("alert"))
         load_reviews.clear()
     else:
         show_error(resp)
@@ -217,6 +267,10 @@ if df.empty:
 # ---------- sidebar: filters ----------
 
 st.sidebar.subheader("2. Filters")
+f_search = st.sidebar.text_input(
+    "🔍 Search", placeholder="e.g. biryani, refund, R012",
+    help="Finds reviews containing all these words in the review, the English summary, the reply or the ID.",
+)
 
 
 def multi(label: str, column: str, order: list[str] | None = None) -> list[str]:
@@ -248,6 +302,7 @@ for column, chosen in [
 if isinstance(f_dates, tuple) and len(f_dates) == 2:
     start, end = (pd.Timestamp(d) for d in f_dates)
     view = view[view["date"].isna() | view["date"].between(start, end)]
+view = search(view, f_search)
 
 # ---------- KPIs ----------
 
@@ -276,8 +331,8 @@ if not_done:
 
 # ---------- tabs ----------
 
-tab_urgent, tab_charts, tab_trends, tab_all = st.tabs(
-    ["🚨 Action queue", "📊 Insights", "📈 Trends", "📋 All reviews"]
+tab_urgent, tab_charts, tab_trends, tab_quality, tab_all = st.tabs(
+    ["🚨 Action queue", "📊 Insights", "📈 Trends", "⭐ Reply quality", "📋 All reviews"]
 )
 
 with tab_urgent:
@@ -302,6 +357,7 @@ with tab_urgent:
             st.write(r["review_text"])
             st.markdown(f"**Suggested reply** ({r['language']}) — copy and edit before posting:")
             st.code(r["suggested_reply"] or "", language=None, wrap_lines=True)
+            rating_widget(r, "queue")
 
 with tab_charts:
     if analyzed.empty:
@@ -387,9 +443,49 @@ with tab_trends:
             fig.update_traces(marker_color=URGENCY_COLORS["HIGH"])
             st.plotly_chart(style_fig(fig), width="stretch")
 
+with tab_quality:
+    with_reply = view[view["suggested_reply"].notna()]
+    q = reply_quality(with_reply)
+    st.markdown("Staff rate the AI's suggested replies with 👍 / 👎. "
+                "Use the 👎 notes to see what the AI gets wrong, then improve the prompt.")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("📝 Replies rated", f"{q['rated']} of {q['replies']}", border=True)
+    c2.metric("👍 Rated good", "–" if q["pct_good"] is None else f"{q['pct_good']:.0f}%", border=True)
+    c3.metric("👎 Rated bad", q["bad"], border=True)
+
+    if q["by_language"] is not None:
+        fig = px.bar(q["by_language"], x="language", y="pct_good", text="label",
+                     title="% of rated replies that are good, by language",
+                     labels={"language": "Language", "pct_good": "% good"}, range_y=[0, 105])
+        fig.update_traces(marker_color=SENTIMENT_COLORS["positive"], textposition="outside")
+        st.plotly_chart(style_fig(fig), width="stretch")
+
+    unrated = with_reply[with_reply["reply_rating"].isna()].sort_values("date", ascending=False)
+    st.subheader(f"Rate more replies ({len(unrated)} not rated yet)")
+    if unrated.empty:
+        st.success("Every reply in this selection is rated. 🎉")
+    for _, r in unrated.head(10).iterrows():
+        with st.expander(f"{r['language']} · {r['sentiment']} · {r['urgency']} — {r['summary']}"):
+            st.markdown("**Customer wrote:**")
+            st.write(r["review_text"])
+            st.markdown("**Suggested reply:**")
+            st.code(r["suggested_reply"], language=None, wrap_lines=True)
+            rating_widget(r, "rate")
+    if len(unrated) > 10:
+        st.caption("Showing 10. Rate these and the next ones appear, or use the filters to focus on one language.")
+
+    bad = with_reply[with_reply["reply_rating"] == "bad"]
+    st.subheader(f"Replies marked 👎 ({len(bad)})")
+    if bad.empty:
+        st.info("No replies marked bad in this selection.")
+    else:
+        st.dataframe(bad[["review_id", "language", "urgency", "review_text", "suggested_reply", "reply_note"]],
+                     width="stretch", hide_index=True,
+                     column_config={"reply_note": "Staff note"})
+
 with tab_all:
     columns = ["review_id", "date", "platform", "rating", "sentiment", "urgency", "category",
-               "language", "summary", "review_text", "suggested_reply"]
+               "language", "summary", "review_text", "suggested_reply", "reply_rating", "reply_note"]
     st.dataframe(
         view[columns],
         width="stretch",

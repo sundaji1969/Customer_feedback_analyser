@@ -79,6 +79,21 @@ class ReviewOut(BaseModel):
     summary: str | None
     suggested_reply: str | None
     analyzed_at: dt.datetime | None
+    reply_rating: str | None = None
+    reply_note: str | None = None
+
+
+class ReplyRating(BaseModel):
+    """Staff verdict on one suggested reply. rating=None clears it."""
+
+    review_id: str
+    rating: Literal["good", "bad"] | None
+    note: str | None = Field(None, max_length=1000)
+
+    @field_validator("note")
+    @classmethod
+    def blank_note_is_none(cls, value: str | None) -> str | None:
+        return (value or "").strip() or None
 
 
 class UploadResult(BaseModel):
@@ -88,3 +103,4 @@ class UploadResult(BaseModel):
     analyzed: int
     failed: int
     errors: list[str] = []
+    alert: str | None = None  # what happened with the high-urgency email, if one was due
