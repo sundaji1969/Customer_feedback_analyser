@@ -1,0 +1,30 @@
+# Add-on for servers that ALREADY run Traefik on ports 80/443 (e.g. Hostinger's n8n template).
+# The dashboard joins Traefik's network and is served over HTTPS on your domain; Traefik gets
+# the certificate. The plain port 8502 is removed, so the dashboard is only reachable via HTTPS.
+#
+#   docker compose -p reviewlens -f docker-compose.prod.yml -f deploy/docker-compose.traefik.yml up -d --build
+#
+# Needed in .env (next to docker-compose.prod.yml):
+#   SITE_ADDRESS=reviews.example.com     # its DNS A record must point at this server
+#   TRAEFIK_NETWORK=n8n_default          # Traefik's docker network:  docker network ls
+#   TRAEFIK_CERTRESOLVER=mytlschallenge  # Traefik's ACME resolver name (see its --certificatesresolvers flag)
+
+services:
+  frontend:
+    ports: !reset []
+    networks: [default, traefik]
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: ${TRAEFIK_NETWORK:?set TRAEFIK_NETWORK in .env}
+      traefik.http.routers.reviewlens-web.rule: Host(`${SITE_ADDRESS:?set SITE_ADDRESS in .env}`)
+      traefik.http.routers.reviewlens-web.entrypoints: websecure
+      traefik.http.routers.reviewlens-web.tls: "true"
+      traefik.http.routers.reviewlens-web.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-mytlschallenge}
+      traefik.http.routers.reviewlens-web.middlewares: reviewlens-hsts
+      traefik.http.services.reviewlens-web.loadbalancer.server.port: "8501"
+      traefik.http.middlewares.reviewlens-hsts.headers.stsSeconds: "31536000"
+
+networks:
+  traefik:
+    external: true
+    name: ${TRAEFIK_NETWORK}

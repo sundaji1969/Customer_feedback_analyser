@@ -158,6 +158,22 @@ docker compose -f docker-compose.prod.yml up -d --build
 Then open `http://<server-ip>:8502` (allow that port in the VPS firewall).
 The server database starts empty: upload your CSV from the dashboard.
 
+**HTTPS on a server that already runs Traefik** (e.g. Hostinger's n8n template, which owns ports 80/443):
+use the add-on `deploy/docker-compose.traefik.yml`. The dashboard is then served at
+`https://<your domain>` with a free certificate, and port 8502 is closed. Add to the server's `.env`:
+
+```bash
+SITE_ADDRESS=reviews.example.com     # DNS A record must point at the server
+TRAEFIK_NETWORK=n8n_default          # find it with: docker network ls
+TRAEFIK_CERTRESOLVER=mytlschallenge
+```
+
+```bash
+docker compose -p reviewlens -f docker-compose.prod.yml -f deploy/docker-compose.traefik.yml up -d --build
+```
+
+Update later with `git pull` and the same command (the database is kept).
+
 ---
 
 ## Settings (`.env`)
