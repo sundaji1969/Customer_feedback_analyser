@@ -27,7 +27,7 @@ def reply_quality(with_reply: pd.DataFrame) -> dict:
     % good is over RATED replies only; unrated replies are not counted as good or bad."""
     rated = with_reply[with_reply["reply_rating"].isin(["good", "bad"])]
     good = int((rated["reply_rating"] == "good").sum())
-    by_language = None
+    by_language: pd.DataFrame | None = None
     if not rated.empty:
         by_language = (
             rated.assign(good=rated["reply_rating"] == "good")
@@ -55,7 +55,9 @@ def search(view: pd.DataFrame, text: str) -> pd.DataFrame:
     words = text.lower().split()
     if not words:
         return view
-    haystack = view[SEARCH_COLUMNS].fillna("").astype(str).agg(" ".join, axis=1).str.lower()
+    cols = view[SEARCH_COLUMNS].fillna("").astype(str)
+    # str.cat always returns a Series (agg(..., axis=1) is typed as DataFrame | Series)
+    haystack = cols.iloc[:, 0].str.cat(cols.iloc[:, 1:], sep=" ").str.lower()
     keep = pd.Series(True, index=view.index)
     for word in words:
         keep &= haystack.str.contains(word, regex=False)  # plain text, so "?" or "(" are safe
