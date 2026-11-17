@@ -37,10 +37,17 @@ html, body, [class*="css"], .stMarkdown, .stText, button, input { font-family: '
 /* Sidebar: deep gradient */
 section[data-testid="stSidebar"] { background: linear-gradient(180deg, #1e1b4b 0%, #4c1d95 55%, #831843 100%); }
 section[data-testid="stSidebar"] * { color: #f5f3ff !important; }
-section[data-testid="stSidebar"] [data-baseweb="select"] *, section[data-testid="stSidebar"] input { color: #1f2937 !important; }
+/* Widgets with a light background (inputs, date range, uploaded file, messages) need dark text */
+section[data-testid="stSidebar"] [data-baseweb="select"] *,
+section[data-testid="stSidebar"] [data-baseweb="input"] *,
+section[data-testid="stSidebar"] [data-baseweb="base-input"] *,
+section[data-testid="stSidebar"] [data-testid="stDateInput"] [data-baseweb] *,
+section[data-testid="stSidebar"] [data-testid="stAlert"] *,
+section[data-testid="stSidebar"] input {
+  color: #1f2937 !important; -webkit-text-fill-color: #1f2937 !important; }
+section[data-testid="stSidebar"] input::placeholder { color: #6b7280 !important; -webkit-text-fill-color: #6b7280 !important; }
 section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] { background: rgba(255,255,255,.08); border: 1px dashed rgba(255,255,255,.4); }
 section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] * { color: #f5f3ff !important; }
-
 /* Buttons */
 .stButton > button, .stDownloadButton > button {
   background: linear-gradient(90deg, #7c3aed, #ec4899); color: #fff !important; border: 0;
