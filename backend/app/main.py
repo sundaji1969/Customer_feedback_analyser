@@ -68,8 +68,15 @@ def _read_csv(raw: bytes) -> pd.DataFrame:
     df = df.drop_duplicates(subset="review_id", keep="last")
 
     df["rating"] = pd.to_numeric(df["rating"], errors="coerce").round()
-    df["date"] = pd.to_datetime(df["date"], errors="coerce", format="mixed", dayfirst=True).dt.date
+    df["date"] = _parse_dates(df["date"])
     return df
+
+
+def _parse_dates(values: pd.Series) -> pd.Series:
+    """ISO dates (2026-10-01) are year-month-day; anything else (01/10/2026) is day-first, Indian style."""
+    iso = pd.to_datetime(values, errors="coerce", format="ISO8601")
+    other = pd.to_datetime(values.where(iso.isna()), errors="coerce", format="mixed", dayfirst=True)
+    return iso.fillna(other).dt.date
 
 
 def _analyze_pending(db: Session, review_ids: list[str] | None = None) -> tuple[int, int, list[str]]:

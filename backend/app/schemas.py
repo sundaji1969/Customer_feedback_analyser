@@ -1,5 +1,5 @@
 """Data shapes: what the AI must return, and what the API sends back."""
-from datetime import date, datetime
+import datetime as dt
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -39,7 +39,7 @@ class ReviewOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     review_id: str
-    date: date | None
+    date: dt.date | None
     platform: str | None
     rating: int | None
     review_text: str
@@ -49,7 +49,7 @@ class ReviewOut(BaseModel):
     language: str | None
     summary: str | None
     suggested_reply: str | None
-    analyzed_at: datetime | None
+    analyzed_at: dt.datetime | None
 
 
 class UploadResult(BaseModel):

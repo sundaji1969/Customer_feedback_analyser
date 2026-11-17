@@ -1,5 +1,5 @@
 """Database tables."""
-from datetime import date, datetime
+import datetime as dt
 
 from sqlalchemy import Date, DateTime, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
@@ -14,7 +14,7 @@ class Review(Base):
 
     # --- Columns from the uploaded CSV ---
     review_id: Mapped[str] = mapped_column(String(100), unique=True, index=True)
-    date: Mapped[date | None] = mapped_column(Date, index=True)
+    date: Mapped[dt.date | None] = mapped_column(Date, index=True)
     platform: Mapped[str | None] = mapped_column(String(100))
     rating: Mapped[int | None] = mapped_column(Integer)
     review_text: Mapped[str] = mapped_column(Text)
@@ -27,5 +27,5 @@ class Review(Base):
     summary: Mapped[str | None] = mapped_column(Text)
     suggested_reply: Mapped[str | None] = mapped_column(Text)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    analyzed_at: Mapped[datetime | None] = mapped_column(DateTime)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, server_default=func.now())
+    analyzed_at: Mapped[dt.datetime | None] = mapped_column(DateTime)

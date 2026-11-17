@@ -90,7 +90,7 @@ The file must be **UTF-8** (in Excel: *Save As → CSV UTF-8*) with these column
 | Column | Example | Notes |
 |---|---|---|
 | `review_id` | R001 | Unique. Uploading the same ID again updates that review. |
-| `date` | 2026-10-01 | Day-first dates such as 01/10/2026 also work. |
+| `date` | 2026-10-01 | `YYYY-MM-DD` is read as year-month-day. Other formats are day-first (01/10/2026 = 1 Oct). Can be empty. |
 | `platform` | Google, Zomato, Swiggy | Any text |
 | `rating` | 1–5 | Can be empty |
 | `review_text` | Biryani semma taste… | Rows with empty text are skipped |
@@ -153,6 +153,22 @@ Never commit `.env`. It is already listed in `.gitignore`.
 
 ---
 
+## Tests
+
+The backend has automated tests. They run offline in about a second: they use a throwaway
+SQLite database and a fake AI, so they need **no OpenAI key, cost nothing, and never touch your real data**.
+
+```bash
+cd backend
+pip install -r requirements-dev.txt
+python -m pytest
+```
+
+They cover CSV upload and clean-up, re-uploads (no repeat AI charges), AI failures and retry,
+every filter, CSV export (incl. Tamil text) and the delete safety check.
+
+---
+
 ## Project structure
 
 ```
@@ -166,8 +182,11 @@ Customer-feedback_ai/
 │   │   ├── database.py    # DB connection
 │   │   ├── config.py      # reads .env
 │   │   └── init_db.py     # create tables manually
+│   ├── tests/             # pytest tests (offline, fake AI)
+│   ├── pytest.ini
 │   ├── Dockerfile
-│   └── requirements.txt
+│   ├── requirements.txt
+│   └── requirements-dev.txt   # + pytest
 ├── frontend/
 │   ├── app.py             # Streamlit dashboard
 │   ├── .streamlit/config.toml   # colour theme
