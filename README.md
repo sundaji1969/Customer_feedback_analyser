@@ -212,6 +212,8 @@ python -m pytest
 - **Dashboard:** weekly trend maths (empty weeks, missing ratings/dates, week-over-week change) and
   the whole dashboard rendered against a fake backend: every tab, filters, empty database, backend down.
 
+**Automatic:** GitHub runs both test suites, and checks that the Docker images build, on every push and pull request (`.github/workflows/tests.yml`). See the repo's **Actions** tab.
+
 ---
 
 ## Project structure
