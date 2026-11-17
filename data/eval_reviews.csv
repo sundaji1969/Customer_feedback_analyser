@@ -1,42 +1,42 @@
-review_id,rating,platform,review_text,sentiment,category,urgency,language,note
-R001,5,Google,"Excellent food and very friendly staff. Will come again with family!",positive,Product Quality|Staff Behaviour,LOW,English,
-R002,2,Zomato,"Food was cold and the delivery guy was rude. Very disappointed.",negative,Delivery,MEDIUM,English,
-R003,5,Swiggy,"சாப்பாடு மிகவும் சுவையாக இருந்தது! சேவை அருமை.",positive,Product Quality,LOW,Tamil,
-R004,1,Swiggy,"Biryani semma taste, but after eating my son got vomiting. Romba worry ah iruku!",negative,Product Quality,HIGH,Tanglish,health
-R005,3,Google,"Food is okay but prices are too high for the portion size.",neutral|negative,Pricing,LOW|MEDIUM,English,
-R006,2,Zomato,"Delivery romba late, food cold ah irundhuchu. 1 hour wait panninom.",negative,Delivery,MEDIUM,Tanglish,same situation as the prompt example
-R007,1,Google,"Money deducted from my account twice but order was cancelled. No refund after 10 days. I will file a consumer complaint.",negative,Payment/Refund,HIGH,English,money + legal
-R008,2,App Store,"App keeps crashing when I try to apply the coupon code.",negative,App/Website,MEDIUM,English,
-R009,4,Google,"Nice ambience, clean tables. Parking is a bit difficult.",positive,Other|Cleanliness,LOW,English,
-R010,2,Swiggy,"Wrong item delivered. I ordered veg meals but got chicken fried rice.",negative,Delivery|Product Quality,MEDIUM|HIGH,English,vegetarian given meat
-R011,5,Zomato,"Dosa crispy ah super ah irundhuchu, chutney semma. Definitely recommend!",positive,Product Quality,LOW,Tanglish,
-R012,1,Google,"கடையில் சுத்தம் இல்லை. மேசையில் கரப்பான் பூச்சி பார்த்தேன்.",negative,Cleanliness,HIGH,Tamil,cockroach = hygiene
-R013,1,Google,"The manager shouted at my wife in front of everyone. Worst behaviour ever. Posting this everywhere.",negative,Staff Behaviour,HIGH,English,
-R014,4,Swiggy,"Good taste, packing also neat. Delivery was on time.",positive,Product Quality|Delivery,LOW,English,
-R015,3,Zomato,"Average experience. Nothing special, nothing bad.",neutral,Other,LOW,English,
-R016,2,Google,"Called customer care three times, nobody picked up the phone.",negative,Customer Service,MEDIUM,English,complaint is about support itself
-R017,4,App Store,"New app update is much faster. Please add UPI autopay option.",positive,App/Website,LOW,English,
-H001,5,Google,"Wow, waited only 2 hours for a cold pizza. Amazing service, truly.",negative,Delivery,MEDIUM,English,sarcasm + 5 stars
-H002,1,Zomato,"Food was really tasty and delivery was quick. Loved it!",positive,Product Quality|Delivery,LOW,English,1 star by mistake
-H003,4,Swiggy,"Paneer butter masala nalla irundhuchu, aana sapta aprom throat la itching. I have nut allergy, menu la cashew irukunu sollave illa.",negative,Product Quality,HIGH,Tanglish,allergy - health
-H004,2,Google,"உணவில் முடி இருந்தது. ஊழியரிடம் சொன்னபோது அவர் சிரித்தார்.",negative,Product Quality|Staff Behaviour|Cleanliness,MEDIUM|HIGH,Tamil,hair in food + staff laughed
-H005,3,Swiggy,"Ok",neutral,Other,LOW,English,very short
-H006,5,Google,"👍👍👍",positive,Other,LOW,Other|English,emoji only
-H007,1,Google,"Khana bahut thanda tha aur delivery boy ne badtameezi ki.",negative,Delivery|Staff Behaviour,MEDIUM,Other,Hindi in Latin letters
-H008,2,App Store,"Payment failed but amount debited. Customer care says wait 7 days. Already 3 days over.",negative,Payment/Refund,MEDIUM|HIGH,English,money taken
-H009,1,Zomato,"Delivery guy asked for my number and kept messaging me on WhatsApp after delivery. Very scary.",negative,Staff Behaviour|Delivery,HIGH,English,safety / harassment
-H010,4,Google,"Food semma, but parking problem romba. Weekend la vandha car nirutha edame illa.",positive|neutral,Other,LOW,Tanglish,mixed
-H011,2,Swiggy,"Price increase pannitinga, same quantity. 180 rupees for idli vada is too much.",negative,Pricing,LOW|MEDIUM,Tanglish,
-H012,5,Zomato,"ரொம்ப நல்ல சர்வீஸ். டெலிவரி பையன் மழையிலும் சரியான நேரத்தில் கொண்டு வந்தார். நன்றி!",positive,Delivery|Customer Service,LOW,Tamil,
-H013,1,Google,"Found a piece of glass in my curry. My daughter almost swallowed it. Going to the food safety department.",negative,Product Quality,HIGH,English,safety + legal
-H014,3,App Store,"Can you add dark mode? Otherwise the app is fine.",neutral|positive,App/Website,LOW,English,suggestion
-H015,2,Google,"Toilet was very dirty and smelling. Tables also sticky.",negative,Cleanliness,MEDIUM,English,
-H016,1,Swiggy,"Order cancel aagiduchu, refund innum varala. 2 weeks aachu. Romba frustrating. Consumer court ku poga poren.",negative,Payment/Refund,HIGH,Tanglish,money + legal
-H017,4,Zomato,"Staff romba polite, especially Ramesh anna. Food konjam late ah vandhuchu but ok.",positive,Staff Behaviour|Customer Service,LOW,Tanglish,
-H018,2,Google,"Website shows the shop open till 11 but they closed at 9:30. Wasted trip.",negative,App/Website|Other,MEDIUM|LOW,English,
-H019,1,Zomato,"Worst. Never ordering again.",negative,Other|Product Quality,MEDIUM,English,angry but no detail
-H020,5,Google,"Best filter coffee in Chennai. Been coming here for 10 years.",positive,Product Quality,LOW,English,
-H021,2,Swiggy,"சாப்பாடு வந்தது ஆனால் பாதி பொருட்கள் இல்லை. பணம் முழுவதும் எடுத்துக்கொண்டீர்கள்.",negative,Delivery|Payment/Refund,MEDIUM|HIGH,Tamil,missing items
-H022,3,Google,"Food good but the waiter kept rushing us to leave because another group was waiting.",neutral|negative,Staff Behaviour|Customer Service,LOW|MEDIUM,English,
-H023,1,App Store,"Your app saved my card and charged me for an order I never placed!",negative,Payment/Refund|App/Website,HIGH,English,fraud
-H024,5,Swiggy,"Semma packing, hot ah vandhuchu, extra chutney kuduthathuku thanks!",positive,Product Quality|Delivery,LOW,Tanglish,
+review_id,Date,rating,platform,review_text,sentiment,category,urgency,language,note
+R001,01-Nov-26,5,Google,Excellent food and very friendly staff. Will come again with family!,positive,Product Quality|Staff Behaviour,LOW,English,
+R002,02-Nov-26,2,Zomato,Food was cold and the delivery guy was rude. Very disappointed.,negative,Delivery,MEDIUM,English,
+R003,03-Nov-26,5,Swiggy,சாப்பாடு மிகவும் சுவையாக இருந்தது! சேவை அருமை.,positive,Product Quality,LOW,Tamil,
+R004,04-Nov-26,1,Swiggy,"Biryani semma taste, but after eating my son got vomiting. Romba worry ah iruku!",negative,Product Quality,HIGH,Tanglish,health
+R005,05-Nov-26,3,Google,Food is okay but prices are too high for the portion size.,neutral|negative,Pricing,LOW|MEDIUM,English,
+R006,06-Nov-26,2,Zomato,"Delivery romba late, food cold ah irundhuchu. 1 hour wait panninom.",negative,Delivery,MEDIUM,Tanglish,same situation as the prompt example
+R007,07-Nov-26,1,Google,Money deducted from my account twice but order was cancelled. No refund after 10 days. I will file a consumer complaint.,negative,Payment/Refund,HIGH,English,money + legal
+R008,08-Nov-26,2,App Store,App keeps crashing when I try to apply the coupon code.,negative,App/Website,MEDIUM,English,
+R009,09-Nov-26,4,Google,"Nice ambience, clean tables. Parking is a bit difficult.",positive,Other|Cleanliness,LOW,English,
+R010,10-Nov-26,2,Swiggy,Wrong item delivered. I ordered veg meals but got chicken fried rice.,negative,Delivery|Product Quality,MEDIUM|HIGH,English,vegetarian given meat
+R011,11-Nov-26,5,Zomato,"Dosa crispy ah super ah irundhuchu, chutney semma. Definitely recommend!",positive,Product Quality,LOW,Tanglish,
+R012,12-Nov-26,1,Google,கடையில் சுத்தம் இல்லை. மேசையில் கரப்பான் பூச்சி பார்த்தேன்.,negative,Cleanliness,HIGH,Tamil,cockroach = hygiene
+R013,13-Nov-26,1,Google,The manager shouted at my wife in front of everyone. Worst behaviour ever. Posting this everywhere.,negative,Staff Behaviour,HIGH,English,
+R014,14-Nov-26,4,Swiggy,"Good taste, packing also neat. Delivery was on time.",positive,Product Quality|Delivery,LOW,English,
+R015,15-Nov-26,3,Zomato,"Average experience. Nothing special, nothing bad.",neutral,Other,LOW,English,
+R016,16-Nov-26,2,Google,"Called customer care three times, nobody picked up the phone.",negative,Customer Service,MEDIUM,English,complaint is about support itself
+R017,17-Nov-26,4,App Store,New app update is much faster. Please add UPI autopay option.,positive,App/Website,LOW,English,
+H001,18-Nov-26,5,Google,"Wow, waited only 2 hours for a cold pizza. Amazing service, truly.",negative,Delivery,MEDIUM,English,sarcasm + 5 stars
+H002,19-Nov-26,1,Zomato,Food was really tasty and delivery was quick. Loved it!,positive,Product Quality|Delivery,LOW,English,1 star by mistake
+H003,20-Nov-26,4,Swiggy,"Paneer butter masala nalla irundhuchu, aana sapta aprom throat la itching. I have nut allergy, menu la cashew irukunu sollave illa.",negative,Product Quality,HIGH,Tanglish,allergy - health
+H004,21-Nov-26,2,Google,உணவில் முடி இருந்தது. ஊழியரிடம் சொன்னபோது அவர் சிரித்தார்.,negative,Product Quality|Staff Behaviour|Cleanliness,MEDIUM|HIGH,Tamil,hair in food + staff laughed
+H005,22-Nov-26,3,Swiggy,Ok,neutral,Other,LOW,English,very short
+H006,23-Nov-26,5,Google,👍👍👍,positive,Other,LOW,Other|English,emoji only
+H007,24-Nov-26,1,Google,Khana bahut thanda tha aur delivery boy ne badtameezi ki.,negative,Delivery|Staff Behaviour,MEDIUM,Other,Hindi in Latin letters
+H008,25-Nov-26,2,App Store,Payment failed but amount debited. Customer care says wait 7 days. Already 3 days over.,negative,Payment/Refund,MEDIUM|HIGH,English,money taken
+H009,26-Nov-26,1,Zomato,Delivery guy asked for my number and kept messaging me on WhatsApp after delivery. Very scary.,negative,Staff Behaviour|Delivery,HIGH,English,safety / harassment
+H010,27-Nov-26,4,Google,"Food semma, but parking problem romba. Weekend la vandha car nirutha edame illa.",positive|neutral,Other,LOW,Tanglish,mixed
+H011,28-Nov-26,2,Swiggy,"Price increase pannitinga, same quantity. 180 rupees for idli vada is too much.",negative,Pricing,LOW|MEDIUM,Tanglish,
+H012,29-Nov-26,5,Zomato,ரொம்ப நல்ல சர்வீஸ். டெலிவரி பையன் மழையிலும் சரியான நேரத்தில் கொண்டு வந்தார். நன்றி!,positive,Delivery|Customer Service,LOW,Tamil,
+H013,30-Nov-26,1,Google,Found a piece of glass in my curry. My daughter almost swallowed it. Going to the food safety department.,negative,Product Quality,HIGH,English,safety + legal
+H014,01-Dec-26,3,App Store,Can you add dark mode? Otherwise the app is fine.,neutral|positive,App/Website,LOW,English,suggestion
+H015,02-Dec-26,2,Google,Toilet was very dirty and smelling. Tables also sticky.,negative,Cleanliness,MEDIUM,English,
+H016,03-Dec-26,1,Swiggy,"Order cancel aagiduchu, refund innum varala. 2 weeks aachu. Romba frustrating. Consumer court ku poga poren.",negative,Payment/Refund,HIGH,Tanglish,money + legal
+H017,04-Dec-26,4,Zomato,"Staff romba polite, especially Ramesh anna. Food konjam late ah vandhuchu but ok.",positive,Staff Behaviour|Customer Service,LOW,Tanglish,
+H018,05-Dec-26,2,Google,Website shows the shop open till 11 but they closed at 9:30. Wasted trip.,negative,App/Website|Other,MEDIUM|LOW,English,
+H019,06-Dec-26,1,Zomato,Worst. Never ordering again.,negative,Other|Product Quality,MEDIUM,English,angry but no detail
+H020,07-Dec-26,5,Google,Best filter coffee in Chennai. Been coming here for 10 years.,positive,Product Quality,LOW,English,
+H021,08-Dec-26,2,Swiggy,சாப்பாடு வந்தது ஆனால் பாதி பொருட்கள் இல்லை. பணம் முழுவதும் எடுத்துக்கொண்டீர்கள்.,negative,Delivery|Payment/Refund,MEDIUM|HIGH,Tamil,missing items
+H022,09-Dec-26,3,Google,Food good but the waiter kept rushing us to leave because another group was waiting.,neutral|negative,Staff Behaviour|Customer Service,LOW|MEDIUM,English,
+H023,10-Dec-26,1,App Store,Your app saved my card and charged me for an order I never placed!,negative,Payment/Refund|App/Website,HIGH,English,fraud
+H024,11-Dec-26,5,Swiggy,"Semma packing, hot ah vandhuchu, extra chutney kuduthathuku thanks!",positive,Product Quality|Delivery,LOW,Tanglish,
