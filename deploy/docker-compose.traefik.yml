@@ -10,7 +10,16 @@
 #   TRAEFIK_CERTRESOLVER=mytlschallenge  # Traefik's ACME resolver name (see its --certificatesresolvers flag)
 
 services:
+  # Other apps on Traefik's shared network may also have a container called "backend"
+  # (e.g. ShopLedger). Give ours a unique name so the dashboard never talks to the wrong API.
+  backend:
+    networks:
+      default:
+        aliases: [reviewlens-backend]
+
   frontend:
+    environment:
+      BACKEND_URL: http://reviewlens-backend:8000
     ports: !reset []
     networks: [default, traefik]
     labels:
