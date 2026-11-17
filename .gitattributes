@@ -1,0 +1,2 @@
+# Keep Linux line endings (Docker containers run Linux)
+* text=auto eol=lf
