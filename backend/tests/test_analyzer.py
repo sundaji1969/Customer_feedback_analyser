@@ -4,7 +4,7 @@ import pytest
 from app import analyzer, config
 from app.schemas import ReviewAnalysis, ReviewTags
 
-GOOD_TAGS = dict(sentiment="positive", category="Delivery", urgency="LOW", language="Tamil", summary="Customer liked the food.")
+GOOD_TAGS = dict(sentiment="positive", category="Delivery", urgency="LOW", language="English", summary="Customer liked the food.")
 
 
 class FakeChain:
@@ -37,13 +37,16 @@ def test_missing_or_placeholder_key_raises(monkeypatch, key):
         analyzer.analyze_reviews([{"review_text": "hi", "rating": 5, "platform": "Google"}])
 
 
-def test_tags_and_reply_use_their_own_temperatures(monkeypatch):
+def test_tags_and_reply_use_their_own_models_and_temperatures(monkeypatch):
     monkeypatch.setattr(analyzer, "OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr(analyzer, "TAG_MODEL", "tag-model-x")
+    monkeypatch.setattr(analyzer, "REPLY_MODEL", "reply-model-y")
     monkeypatch.setattr(analyzer, "TAG_TEMPERATURE", 0.0)
     monkeypatch.setattr(analyzer, "REPLY_TEMPERATURE", 0.4)
     tag_chain, reply_chain = analyzer._build_chains()
     tag_llm = tag_chain.bound.steps[1].bound          # retry wrapper -> prompt | llm-with-schema
     reply_llm = reply_chain.steps[1]
+    assert (tag_llm.model_name, reply_llm.model_name) == ("tag-model-x", "reply-model-y")
     assert (tag_llm.temperature, reply_llm.temperature) == (0.0, 0.4)
     # every call has a time limit, so one stuck request can't hang an upload
     assert tag_llm.request_timeout == reply_llm.request_timeout == config.AI_TIMEOUT_SECONDS
@@ -77,7 +80,7 @@ def test_inputs_and_tags_flow_into_reply(monkeypatch):
 
     reply_input = reply_chain.calls[0]["inputs"][1]
     assert reply_input == {"review_text": "b", "rating": 0, "platform": "Swiggy",
-                           "sentiment": "positive", "urgency": "LOW", "language": "Tamil"}
+                           "sentiment": "positive", "urgency": "LOW", "language": "English"}
 
     assert all(isinstance(r, ReviewAnalysis) for r in out)
     assert out[0].suggested_reply == "Thanks a!"  # whitespace trimmed
@@ -119,7 +122,7 @@ def test_prompts_include_review_details():
         review_text="Semma taste", rating=5, platform="Zomato",
         sentiment="positive", urgency="LOW", language="Tanglish",
     )
-    assert "SAME language" in reply_msgs[0].content
+    assert "Tanglish review -> reply in Tanglish" in reply_msgs[0].content
     assert "urgency=LOW" in reply_msgs[1].content and "language=Tanglish" in reply_msgs[1].content
 
 
@@ -172,3 +175,45 @@ def test_bad_temperature_gives_clear_error(monkeypatch, raw):
 def test_default_temperatures():
     assert config.TAG_TEMPERATURE == 0.0
     assert config.REPLY_TEMPERATURE == 0.4
+
+
+# ---------- model settings ----------
+
+@pytest.mark.parametrize("env, expected", [
+    ({}, ("gpt-4o-mini", "gpt-5.5")),                                     # defaults
+    ({"OPENAI_MODEL": "old-model"}, ("old-model", "gpt-5.5")),            # old .env keeps working
+    ({"OPENAI_MODEL": "old-model", "TAG_MODEL": "t"}, ("t", "gpt-5.5")),  # TAG_MODEL wins
+    ({"TAG_MODEL": " t ", "REPLY_MODEL": " r "}, ("t", "r")),             # spaces trimmed
+    ({"TAG_MODEL": "", "REPLY_MODEL": ""}, ("gpt-4o-mini", "gpt-5.5")),  # empty = default (docker-compose)
+])
+def test_model_settings(monkeypatch, env, expected):
+    for name in ("OPENAI_MODEL", "TAG_MODEL", "REPLY_MODEL"):
+        monkeypatch.delenv(name, raising=False)
+    for name, value in env.items():
+        monkeypatch.setenv(name, value)
+    assert config._models() == expected
+
+
+@pytest.mark.parametrize("review_text, ai_language, expected", [
+    ("Dosa semma ah irundhuchu", "Tamil", "Tanglish"),      # no Tamil script -> cannot be Tamil
+    ("சாப்பாடு அருமை", "Tanglish", "Tamil"),                 # Tamil script -> Tamil
+    ("சாப்பாடு super, delivery late", "English", "Tamil"),  # any Tamil script -> Tamil
+    ("Dosa semma ah irundhuchu", "Tanglish", "Tanglish"),   # already right
+    ("Food was great", "English", "English"),
+    ("Khana thanda tha", "Other", "Other"),
+])
+def test_fix_language_uses_the_script(review_text, ai_language, expected):
+    tags = ReviewTags(**{**GOOD_TAGS, "language": ai_language})
+    assert analyzer.fix_language(tags, review_text).language == expected
+
+
+def test_reply_step_gets_the_corrected_language(monkeypatch):
+    text = "Delivery romba late"
+    _, reply_chain = use_fake_chains(
+        monkeypatch,
+        tag_outputs={text: ReviewTags(**{**GOOD_TAGS, "language": "Tamil"})},
+        reply_outputs={text: "Sorry, naanga check panrom"},
+    )
+    out = analyzer.analyze_reviews([{"review_text": text}])
+    assert reply_chain.calls[0]["inputs"][0]["language"] == "Tanglish"
+    assert out[0].language == "Tanglish"

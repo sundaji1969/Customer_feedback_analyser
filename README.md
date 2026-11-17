@@ -165,7 +165,8 @@ The server database starts empty: upload your CSV from the dashboard.
 | Variable | Default | Purpose |
 |---|---|---|
 | `OPENAI_API_KEY` | — | Required |
-| `OPENAI_MODEL` | `gpt-4o-mini` | OpenAI model used for tagging |
+| `TAG_MODEL` | `gpt-4o-mini` | OpenAI model for tags (sentiment, category, urgency, language, summary). A small model scores as well as big ones here. The old `OPENAI_MODEL` setting still works for this. |
+| `REPLY_MODEL` | `gpt-5.5` | OpenAI model for suggested replies. A stronger model writes better Tamil/Tanglish and more specific replies. |
 | `TAG_TEMPERATURE` | `0` | Randomness for tags (sentiment, category, urgency, language, summary). Keep at 0 so the same review always gets the same tags. |
 | `REPLY_TEMPERATURE` | `0.4` | Randomness for the suggested reply. 0.3–0.5 sounds natural; above 0.7 replies can drift off-script. |
 | `AI_CONCURRENCY` | `8` | Reviews sent to OpenAI at the same time. Lower it if you hit OpenAI rate limits. |
@@ -211,6 +212,20 @@ python -m pytest
   tag/reply temperatures, every filter, CSV export (incl. Tamil text) and the delete safety check.
 - **Dashboard:** weekly trend maths (empty weeks, missing ratings/dates, week-over-week change) and
   the whole dashboard rendered against a fake backend: every tab, filters, empty database, backend down.
+
+**AI quality check (uses your OpenAI key, costs a few cents):** `data/eval_reviews.csv` holds 41
+hand-labelled reviews (English, Tamil, Tanglish, sarcasm, wrong star ratings, health and fraud cases).
+Run it after changing a prompt or model to see whether things got better or worse:
+
+```bash
+cd backend
+python eval_ai.py                        # model from .env
+python eval_ai.py --reply-model gpt-5.4-mini   # try another reply model (or --tag-model, --model for both)
+python eval_ai.py --out answers.json     # also save every tag and reply to read through
+```
+
+It scores each tag against the labels and checks every reply: right language and script, not
+copied from the prompt's examples, no refund promises, not too long. Read some replies yourself too.
 
 **Automatic:** GitHub runs both test suites, and checks that the Docker images build, on every push and pull request (`.github/workflows/tests.yml`). See the repo's **Actions** tab.
 

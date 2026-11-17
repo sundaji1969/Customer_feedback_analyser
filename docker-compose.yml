@@ -29,7 +29,9 @@ services:
     restart: unless-stopped
     environment:
       OPENAI_API_KEY: ${OPENAI_API_KEY}
-      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      OPENAI_MODEL: ${OPENAI_MODEL:-}
+      TAG_MODEL: ${TAG_MODEL:-}
+      REPLY_MODEL: ${REPLY_MODEL:-}
       TAG_TEMPERATURE: ${TAG_TEMPERATURE:-0}
       REPLY_TEMPERATURE: ${REPLY_TEMPERATURE:-0.4}
       AI_CONCURRENCY: ${AI_CONCURRENCY:-8}

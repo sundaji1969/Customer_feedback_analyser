@@ -10,7 +10,18 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 load_dotenv(ROOT_DIR / ".env")
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+
+# Two models: a small, fast one for tags (it scores as well as bigger ones there), and a stronger
+# one for replies (better Tamil/Tanglish and more specific replies). See backend/eval_ai.py.
+# OPENAI_MODEL is the old single setting and still works as the tag model.
+def _models() -> tuple[str, str]:
+    """Returns (tag model, reply model)."""
+    tag = os.getenv("TAG_MODEL", "").strip() or os.getenv("OPENAI_MODEL", "").strip() or "gpt-4o-mini"
+    reply = os.getenv("REPLY_MODEL", "").strip() or "gpt-5.5"
+    return tag, reply
+
+
+TAG_MODEL, REPLY_MODEL = _models()
 
 
 def _temperature(name: str, default: float) -> float:
