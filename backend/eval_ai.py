@@ -28,6 +28,22 @@ REFUND_PROMISE = re.compile(
 )
 
 
+REQUIRED = ["review_id", "review_text", "rating", "platform", *FIELDS]
+
+
+def load_gold(path: Path = EVAL_FILE) -> pd.DataFrame:
+    """Read the labelled reviews. Works after the file is re-saved in Excel:
+    header case and column order do not matter, and empty extra columns are dropped."""
+    gold = pd.read_csv(path, dtype=str, keep_default_na=False, encoding="utf-8-sig")
+    gold.columns = [str(c).strip().lower() for c in gold.columns]
+    gold = gold.loc[:, [c for c in gold.columns if c and not c.startswith("unnamed:")]]
+    missing = [c for c in REQUIRED if c not in gold.columns]
+    if missing:
+        raise SystemExit(f"{path.name} is missing columns: {', '.join(missing)}")
+    gold = gold.apply(lambda col: col.str.strip())
+    return gold[(gold["review_id"] != "") & (gold["review_text"] != "")].reset_index(drop=True)
+
+
 def reply_problems(row, reply: str, example_replies: list[str]) -> list[str]:
     problems = []
     langs = row["language"].split("|")
@@ -63,7 +79,7 @@ def main():
 
     from app import analyzer  # imported after the model settings are set
 
-    gold = pd.read_csv(EVAL_FILE, dtype=str, keep_default_na=False)
+    gold = load_gold()
     reviews = [
         {"review_text": r.review_text, "rating": int(r.rating) if r.rating else None, "platform": r.platform}
         for r in gold.itertuples()
