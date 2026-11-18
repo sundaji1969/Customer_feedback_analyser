@@ -34,3 +34,24 @@ class Review(Base):
 
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, server_default=func.now())
     analyzed_at: Mapped[dt.datetime | None] = mapped_column(DateTime)
+
+
+class DashboardAuth(Base):
+    """The dashboard password (one row, id=1). Empty table = use DASHBOARD_PASSWORD from .env.
+    Only hashes are stored, never the password or the reset code itself."""
+
+    __tablename__ = "dashboard_auth"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    password_hash: Mapped[str | None] = mapped_column(String(255))
+    changed_at: Mapped[dt.datetime | None] = mapped_column(DateTime)
+
+    # --- "Forgot password": a 6-digit code emailed to the admin ---
+    reset_code_hash: Mapped[str | None] = mapped_column(String(255))
+    reset_sent_at: Mapped[dt.datetime | None] = mapped_column(DateTime)
+    reset_expires_at: Mapped[dt.datetime | None] = mapped_column(DateTime)
+    reset_attempts: Mapped[int | None] = mapped_column(Integer)
+
+    # --- Slow down password guessing ---
+    failed_logins: Mapped[int | None] = mapped_column(Integer)
+    locked_until: Mapped[dt.datetime | None] = mapped_column(DateTime)

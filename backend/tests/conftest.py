@@ -11,7 +11,7 @@ os.environ["DATABASE_URL"] = "sqlite://"
 os.environ["OPENAI_API_KEY"] = "test-key-not-real"
 # Alert emails stay off unless a test switches them on (with a fake mail server).
 for _name in ("ALERT_EMAIL_TO", "SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASSWORD",
-              "ALERT_EMAIL_FROM", "DASHBOARD_URL"):
+              "ALERT_EMAIL_FROM", "DASHBOARD_URL", "DASHBOARD_PASSWORD", "RESET_EMAIL_TO"):
     os.environ.pop(_name, None)
 
 import pytest  # noqa: E402

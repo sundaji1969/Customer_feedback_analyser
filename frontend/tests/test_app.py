@@ -96,6 +96,22 @@ def test_filter_narrows_the_view():
     assert "showing <b>1</b> of 5 reviews" in markdown_text(at)
 
 
+def test_from_and_to_dates_filter_the_view():
+    from datetime import date
+    at = run_app(REVIEWS)
+    d_from = next(d for d in at.date_input if d.label == "From")
+    d_to = next(d for d in at.date_input if d.label == "To")
+    assert (d_from.value, d_to.value) == (date(2026, 10, 5), date(2026, 10, 21))
+    with patch("requests.get", side_effect=fake_get(REVIEWS)):
+        d_from.set_value(date(2026, 10, 10)).run()
+    # R3 (14 Oct), R4 (21 Oct) and R5 (no date, always kept)
+    assert "showing <b>3</b> of 5 reviews" in markdown_text(at)
+    with patch("requests.get", side_effect=fake_get(REVIEWS)):
+        next(d for d in at.date_input if d.label == "To").set_value(date(2026, 10, 7)).run()
+    assert any("swapped" in w.value for w in at.warning)  # From 10 Oct > To 7 Oct
+    assert "showing <b>2</b> of 5 reviews" in markdown_text(at)  # R2 (7 Oct) and R5
+
+
 def test_backend_down_shows_clear_error():
     with patch("requests.get", side_effect=requests.ConnectionError("refused")):
         at = AppTest.from_file(APP, default_timeout=60)
@@ -112,9 +128,90 @@ def test_no_password_set_means_no_login(monkeypatch):
     assert len(at.tabs) == 5
 
 
+def fake_auth(password="s3cret-pass"):
+    """Fake backend /auth endpoints: one password, reset code 123456."""
+    calls = []
+
+    def post(url, json=None, **kwargs):
+        calls.append((url.rsplit("/auth/", 1)[-1], json))
+        path = calls[-1][0]
+        ok, body = True, {}
+        if path == "login":
+            ok = json["password"] == password
+            body = {"ok": True} if ok else {"detail": "Wrong password."}
+        elif path == "change-password":
+            ok = json["current_password"] == password
+            body = {"message": "Password changed."} if ok else {"detail": "Wrong password."}
+        elif path == "forgot-password":
+            body = {"message": "A 6-digit code was sent to o***@example.com."}
+        elif path == "reset-password":
+            ok = json["code"] == "123456"
+            body = {"message": "Password reset."} if ok else {"detail": "Wrong code."}
+        resp = MagicMock(ok=ok, status_code=200 if ok else 400)
+        resp.json.return_value = body
+        return resp
+
+    return post, calls
+
+
+def logged_in_app(monkeypatch):
+    monkeypatch.setenv("DASHBOARD_PASSWORD", "s3cret-pass")
+    post, calls = fake_auth()
+    with patch("requests.get", side_effect=fake_get(REVIEWS)), patch("requests.post", side_effect=post):
+        at = AppTest.from_file(APP, default_timeout=60)
+        at.run()
+        at.text_input[0].input("s3cret-pass")
+        at.button[0].click().run()
+    assert len(at.tabs) == 5
+    return at, post, calls
+
+
+def test_forgot_password_sends_code_and_resets(monkeypatch):
+    monkeypatch.setenv("DASHBOARD_PASSWORD", "s3cret-pass")
+    post, calls = fake_auth()
+    with patch("requests.get", side_effect=fake_get(REVIEWS)), patch("requests.post", side_effect=post):
+        at = AppTest.from_file(APP, default_timeout=60)
+        at.run()
+        next(b for b in at.button if b.label == "Email me a reset code").click().run()
+        assert calls[-1] == ("forgot-password", {})
+        assert any("o***@example.com" in s.value for s in at.success)
+
+        at.text_input(key="reset_new").input("new-pass-1")
+        at.text_input(key="reset_again").input("different")
+        next(t for t in at.text_input if t.label == "Code from the email").input("123456")
+        next(b for b in at.button if b.label == "Set new password").click().run()
+        assert any("not the same" in e.value for e in at.error)
+        assert calls[-1][0] == "forgot-password"           # nothing sent to the backend
+
+        at.text_input(key="reset_again").input("new-pass-1")
+        next(b for b in at.button if b.label == "Set new password").click().run()
+        assert calls[-1] == ("reset-password", {"code": "123456", "new_password": "new-pass-1"})
+        assert any("Password reset" in s.value for s in at.success)
+        assert not at.tabs                                  # still has to log in
+
+
+def test_change_password_from_sidebar(monkeypatch):
+    at, post, calls = logged_in_app(monkeypatch)
+    with patch("requests.get", side_effect=fake_get(REVIEWS)), patch("requests.post", side_effect=post):
+        at.text_input(key="change_new").input("short")
+        at.text_input(key="change_again").input("short")
+        next(t for t in at.text_input if t.label == "Current password").input("s3cret-pass")
+        next(b for b in at.button if b.label == "Change password").click().run()
+        assert any("at least 8 characters" in e.value for e in at.error)
+
+        at.text_input(key="change_new").input("brand-new-1")
+        at.text_input(key="change_again").input("brand-new-1")
+        next(t for t in at.text_input if t.label == "Current password").input("s3cret-pass")
+        next(b for b in at.button if b.label == "Change password").click().run()
+    assert not at.exception
+    assert calls[-1] == ("change-password", {"current_password": "s3cret-pass", "new_password": "brand-new-1"})
+    assert any("Password changed" in s.value for s in at.success)
+
+
 def test_password_protects_dashboard(monkeypatch):
     monkeypatch.setenv("DASHBOARD_PASSWORD", "s3cret-pass")
-    with patch("requests.get", side_effect=fake_get(REVIEWS)) as get:
+    post, _ = fake_auth()
+    with patch("requests.get", side_effect=fake_get(REVIEWS)) as get, patch("requests.post", side_effect=post):
         at = AppTest.from_file(APP, default_timeout=60)
         at.run()
         assert not at.tabs                 # dashboard hidden

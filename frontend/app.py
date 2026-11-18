@@ -3,7 +3,6 @@
 Run locally (from the frontend folder):  streamlit run app.py
 The backend must be running first (see backend/app/main.py).
 """
-import hmac
 import os
 from datetime import date
 from pathlib import Path
@@ -108,19 +107,66 @@ def style_fig(fig):
 
 
 # ---------- password (only when DASHBOARD_PASSWORD is set, e.g. on a public server) ----------
+# The backend checks the password, so it can be changed or reset (see backend/app/auth.py).
 
-DASHBOARD_PASSWORD = os.getenv("DASHBOARD_PASSWORD", "")
+LOGIN_REQUIRED = bool(os.getenv("DASHBOARD_PASSWORD", ""))
+MIN_PASSWORD_LENGTH = 8
 
-if DASHBOARD_PASSWORD and not st.session_state.get("logged_in"):
+
+def auth_call(path: str, payload: dict | None = None) -> tuple[bool, str]:
+    """POST to a backend /auth endpoint. Returns (worked, message to show)."""
+    try:
+        resp = requests.post(f"{BACKEND_URL}/auth/{path}", json=payload or {}, timeout=30)
+    except requests.RequestException:
+        return False, f"Cannot reach the backend at {BACKEND_URL}."
+    try:
+        body = resp.json()
+    except ValueError:
+        body = {}
+    if resp.ok:
+        return True, body.get("message", "")
+    detail = body.get("detail", resp.text)
+    if isinstance(detail, list):  # FastAPI validation error, e.g. password too short
+        detail = f"The new password needs at least {MIN_PASSWORD_LENGTH} characters."
+    return False, str(detail)
+
+
+def new_password_problem(new: str, again: str) -> str | None:
+    if len(new) < MIN_PASSWORD_LENGTH:
+        return f"The new password needs at least {MIN_PASSWORD_LENGTH} characters."
+    if new != again:
+        return "The two new passwords are not the same."
+    return None
+
+
+if LOGIN_REQUIRED and not st.session_state.get("logged_in"):
     st.markdown('<div class="hero"><h1>🔎 ReviewLens</h1><p>Please log in to continue.</p></div>',
                 unsafe_allow_html=True)
     with st.form("login"):
         password = st.text_input("Password", type="password")
         if st.form_submit_button("Log in"):
-            if hmac.compare_digest(password.encode(), DASHBOARD_PASSWORD.encode()):
+            ok, message = auth_call("login", {"password": password})
+            if ok:
                 st.session_state["logged_in"] = True
                 st.rerun()
-            st.error("Wrong password.")
+            st.error(message)
+
+    with st.expander("Forgot password?"):
+        st.write("A 6-digit code is emailed to the admin address. It works for 15 minutes.")
+        if st.button("Email me a reset code"):
+            ok, message = auth_call("forgot-password")
+            (st.success if ok else st.error)(message)
+        with st.form("reset", clear_on_submit=False):
+            code = st.text_input("Code from the email", max_chars=6)
+            new = st.text_input("New password", type="password", key="reset_new")
+            again = st.text_input("New password again", type="password", key="reset_again")
+            if st.form_submit_button("Set new password"):
+                problem = new_password_problem(new, again)
+                if problem:
+                    st.error(problem)
+                else:
+                    ok, message = auth_call("reset-password", {"code": code, "new_password": new})
+                    (st.success if ok else st.error)(message)
     st.stop()
 
 
@@ -207,9 +253,23 @@ def rating_widget(r, where: str):
 # ---------- sidebar: upload ----------
 
 st.sidebar.title("🔎 ReviewLens")
-if DASHBOARD_PASSWORD and st.sidebar.button("Log out"):
-    st.session_state["logged_in"] = False
-    st.rerun()
+if LOGIN_REQUIRED:
+    if st.sidebar.button("Log out"):
+        st.session_state["logged_in"] = False
+        st.rerun()
+    with st.sidebar.expander("🔑 Change password"):
+        with st.form("change_password", clear_on_submit=True):
+            current = st.text_input("Current password", type="password")
+            new = st.text_input("New password", type="password", key="change_new")
+            again = st.text_input("New password again", type="password", key="change_again")
+            if st.form_submit_button("Change password"):
+                problem = new_password_problem(new, again)
+                if problem:
+                    st.error(problem)
+                else:
+                    ok, message = auth_call("change-password",
+                                            {"current_password": current, "new_password": new})
+                    (st.success if ok else st.error)(message)
 
 if not backend_ok():
     st.error(f"Cannot reach the backend at {BACKEND_URL}. Start it with `uvicorn app.main:app --reload`.")
@@ -297,7 +357,14 @@ dates = df["date"].dropna()
 f_dates = None
 if not dates.empty:
     min_d, max_d = dates.min().date(), dates.max().date()
-    f_dates = st.sidebar.date_input("Date range", (min_d, max_d), min_value=min_d, max_value=max_d)
+    st.sidebar.markdown("**Date range**")
+    col_from, col_to = st.sidebar.columns(2)
+    d_from = col_from.date_input("From", min_d, min_value=min_d, max_value=max_d, format="DD/MM/YYYY")
+    d_to = col_to.date_input("To", max_d, min_value=min_d, max_value=max_d, format="DD/MM/YYYY")
+    if d_from > d_to:
+        st.sidebar.warning("'From' is after 'To', so the two dates were swapped.")
+        d_from, d_to = d_to, d_from
+    f_dates = (d_from, d_to)
 
 view = df.copy()
 for column, chosen in [

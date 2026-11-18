@@ -13,6 +13,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
+from . import auth
 from .alerts import send_high_urgency_alert
 from .analyzer import analyze_reviews
 from .database import get_db, init_db
@@ -31,6 +32,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="ReviewLens API", version="1.0", lifespan=lifespan)
+app.include_router(auth.router)
 
 
 # ---------- helpers ----------

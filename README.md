@@ -147,6 +147,8 @@ Use `docker-compose.prod.yml`, not `docker-compose.yml`. It is made for a public
 
 - Only the dashboard is open to the internet. The database and API have no public ports.
 - The dashboard asks for a password (`DASHBOARD_PASSWORD`).
+  It can be changed in the dashboard (sidebar → **🔑 Change password**), and a forgotten one is
+  reset with a 6-digit code emailed to `RESET_EMAIL_TO` (see [Dashboard password](#dashboard-password)).
 - Docker refuses to start if a required secret is missing.
 
 Set these environment variables on the server (in Hostinger's Docker Manager, or in a `.env` file next to the compose file):
@@ -155,7 +157,8 @@ Set these environment variables on the server (in Hostinger's Docker Manager, or
 |---|---|---|
 | `OPENAI_API_KEY` | yes | Your OpenAI key |
 | `POSTGRES_PASSWORD` | yes | Long random password, **letters and numbers only** |
-| `DASHBOARD_PASSWORD` | yes | Password people type to open the dashboard |
+| `DASHBOARD_PASSWORD` | yes | First password people type to open the dashboard |
+| `RESET_EMAIL_TO` | no | Gets the "Forgot password?" code (default: `ALERT_EMAIL_TO`). Needs the SMTP settings. |
 | `FRONTEND_PORT` | no | Port on the server, default `8502` |
 
 ```bash
@@ -182,6 +185,19 @@ docker compose -p reviewlens -f docker-compose.prod.yml -f deploy/docker-compose
 
 Update later with `git pull` and the same command (the database is kept).
 
+### Dashboard password
+
+- **First password:** `DASHBOARD_PASSWORD` in the server's `.env`.
+- **Change it:** log in, then sidebar → **🔑 Change password**. From then on the new password is stored
+  (hashed, never in plain text) in the database, and `DASHBOARD_PASSWORD` no longer works.
+- **Forgot it:** on the login page open **Forgot password?** → **Email me a reset code**. A 6-digit code goes to
+  `RESET_EMAIL_TO` (or `ALERT_EMAIL_TO`) using the SMTP settings. It works for 15 minutes; 5 wrong codes cancel it.
+- **Too many wrong passwords:** after 10 in a row, logins are blocked for 5 minutes.
+- **Lost the password and the email:** on the server run
+  `docker exec reviewlens-db-1 psql -U reviewlens -c "DELETE FROM dashboard_auth;"` —
+  `DASHBOARD_PASSWORD` from `.env` works again.
+- People already logged in stay logged in after a change until they log out or close the tab.
+
 ---
 
 ## Settings (`.env`)
@@ -199,7 +215,8 @@ Update later with `git pull` and the same command (the database is kept).
 | `POSTGRES_HOST` / `POSTGRES_PORT` | `localhost` / `5432` | Database address (local runs) |
 | `BACKEND_URL` | `http://localhost:8000` | Where the dashboard finds the API (local runs) |
 | `FRONTEND_PORT` | `8502` | Dashboard port on your computer (Docker) |
-| `DASHBOARD_PASSWORD` | — (off) | If set, the dashboard asks for this password. Required in `docker-compose.prod.yml`. |
+| `DASHBOARD_PASSWORD` | — (off) | If set, the dashboard asks for a password; this is the first one (it can be changed in the dashboard). Required in `docker-compose.prod.yml`. |
+| `RESET_EMAIL_TO` | `ALERT_EMAIL_TO` | Gets the "Forgot password?" reset code. |
 | `ALERT_EMAIL_TO` | — (off) | Who gets the high-urgency email. Several: `a@x.com, b@y.com` |
 | `SMTP_HOST` / `SMTP_PORT` | — / `587` | Mail server. Gmail: `smtp.gmail.com`, `587`. Port `465` uses SSL. |
 | `SMTP_USER` / `SMTP_PASSWORD` | — | Mail login. For Gmail use an **App Password**, not your normal password. |

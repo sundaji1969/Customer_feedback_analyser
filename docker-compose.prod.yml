@@ -47,6 +47,9 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       DASHBOARD_URL: ${DASHBOARD_URL:-}
+      # Dashboard password (first one; it can be changed from the dashboard) and where reset codes go
+      DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD:?Set DASHBOARD_PASSWORD so strangers cannot use the dashboard}
+      RESET_EMAIL_TO: ${RESET_EMAIL_TO:-}
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-reviewlens}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-reviewlens}
     depends_on:
       db:

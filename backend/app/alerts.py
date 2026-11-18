@@ -12,9 +12,15 @@ from email.message import EmailMessage
 MAX_TEXT = 600  # characters of each review shown in the email
 
 
-def alert_settings() -> dict | None:
-    """Mail settings from the environment, or None when alerts are switched off."""
-    to = [a.strip() for a in os.getenv("ALERT_EMAIL_TO", "").split(",") if a.strip()]
+def email_list(name: str) -> list[str]:
+    """Comma-separated addresses from an environment variable."""
+    return [a.strip() for a in os.getenv(name, "").split(",") if a.strip()]
+
+
+def alert_settings(to: list[str] | None = None) -> dict | None:
+    """Mail settings from the environment, or None when email is switched off.
+    `to` defaults to ALERT_EMAIL_TO (password-reset emails pass their own list)."""
+    to = email_list("ALERT_EMAIL_TO") if to is None else to
     host = os.getenv("SMTP_HOST", "").strip()
     if not to or not host:
         return None
@@ -61,7 +67,7 @@ def build_message(reviews: list[dict], settings: dict) -> EmailMessage:
     return msg
 
 
-def _send(msg: EmailMessage, s: dict) -> None:
+def send(msg: EmailMessage, s: dict) -> None:
     context = ssl.create_default_context()
     if s["port"] == 465:
         server = smtplib.SMTP_SSL(s["host"], s["port"], timeout=20, context=context)
@@ -89,7 +95,7 @@ def send_high_urgency_alert(reviews: list[dict]) -> str | None:
     if settings is None:
         return None
     try:
-        _send(build_message(reviews, settings), settings)
+        send(build_message(reviews, settings), settings)
     except (smtplib.SMTPException, OSError, ValueError) as exc:
         return f"Alert email FAILED ({type(exc).__name__}: {exc})"[:300]
     n = len(reviews)
