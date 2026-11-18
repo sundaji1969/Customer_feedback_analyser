@@ -2,6 +2,8 @@
 
 ReviewLens reads customer reviews (English, **தமிழ்** and **Tanglish**), tags each one with AI and shows the results on a colourful dashboard. Use it to find the reviews that need action first.
 
+**🌐 Live site:** https://service.reviewlens.sundajigenai.tech
+
 For every review the AI gives:
 
 | Field | Values |
